@@ -1,0 +1,28 @@
+# Archivos locales de Claude Code — no subir al repo
+CLAUDE.md
+PRD.md
+README.md
+
+# Variables de entorno
+.env
+.env.local
+
+# Dependencias
+node_modules/
+bin/
+obj/
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Visual Studio
+.vs/
+*.user
+
+# Next.js
+.next/
+out/
+
+# Logs
+*.log
