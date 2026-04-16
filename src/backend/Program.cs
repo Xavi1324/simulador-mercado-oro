@@ -16,6 +16,11 @@ builder.Services.AddSingleton<MetricasEngine>();
 builder.Services.AddSingleton<MercadoCentral>();
 builder.Services.AddHostedService(p => p.GetRequiredService<MercadoCentral>());
 
+// ── Demo: Descomposición Especulativa ─────────────────────────────────────────
+builder.Services.AddSingleton<EstrategiaService>();
+builder.Services.AddSingleton<SimuladorService>();
+builder.Services.AddSingleton<PortafolioService>();
+
 // CORS — obligatorio para SignalR con Next.js (AllowCredentials requiere origen explícito)
 builder.Services.AddCors(options =>
     options.AddPolicy("FrontendPolicy", policy =>
