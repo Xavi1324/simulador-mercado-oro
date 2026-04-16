@@ -1,18 +1,13 @@
 import { useEffect, useRef } from 'react';
 import type { NuevoPrecioPayload, ApuestaDemo } from '@/types/simulador';
 
-const NIVELES_FIB = [0, 0.236, 0.382, 0.5, 0.618, 0.764, 1];
-const COLORES_FIB = ['#94a3b8', '#f59e0b', '#10b981', '#3b82f6', '#10b981', '#f59e0b', '#94a3b8'];
-const LABELS_FIB  = ['0%', '23.6%', '38.2%', '50%', '61.8%', '76.4%', '100%'];
-
 const COLORES_ESTRATEGIA: Record<string, string> = {
   Agresiva:     '#4ADE80', // verde
   Conservadora: '#60A5FA', // azul
   Tendencia:    '#F87171', // rojo claro
 };
 
-const TICKS_POR_VELA   = 4;
-const VENTANA_HISTORIAL = 50;
+const TICKS_POR_VELA = 4;
 
 interface GraficaVelasProps {
   onNuevoPrecioRef:       React.MutableRefObject<((data: NuevoPrecioPayload) => void) | null>;
@@ -31,7 +26,6 @@ export default function GraficaVelas({
   const precioActualRef = useRef<HTMLSpanElement>(null);
 
   const ticksEnVelaActualRef = useRef<number[]>([]);
-  const historialPreciosRef  = useRef<number[]>([]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const chartRef        = useRef<any>(null);
@@ -39,8 +33,6 @@ export default function GraficaVelas({
   const seriesRef       = useRef<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const lcRef           = useRef<any>(null);          // módulo lightweight-charts
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const fibLineasRef    = useRef<any[]>([]);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const estratLineasRef = useRef<Map<string, any>>(new Map()); // nombre → PriceLine
 
@@ -95,10 +87,6 @@ export default function GraficaVelas({
         }
 
         ticksEnVelaActualRef.current.push(data.precio);
-        historialPreciosRef.current.push(data.precio);
-        if (historialPreciosRef.current.length > VENTANA_HISTORIAL) {
-          historialPreciosRef.current.shift();
-        }
 
         if (ticksEnVelaActualRef.current.length === TICKS_POR_VELA) {
           const precios = ticksEnVelaActualRef.current;
@@ -111,30 +99,6 @@ export default function GraficaVelas({
           };
           seriesRef.current?.update(vela);
           ticksEnVelaActualRef.current = [];
-
-          const hist = historialPreciosRef.current;
-          if (hist.length >= 2 && seriesRef.current) {
-            const min = Math.min(...hist);
-            const max = Math.max(...hist);
-
-            fibLineasRef.current.forEach((l) => {
-              try { seriesRef.current?.removePriceLine(l); } catch { /* ignorar */ }
-            });
-            fibLineasRef.current = [];
-
-            NIVELES_FIB.forEach((nivel, i) => {
-              const precio = min + (max - min) * nivel;
-              const linea  = seriesRef.current.createPriceLine({
-                price:            precio,
-                color:            COLORES_FIB[i],
-                lineWidth:        1,
-                lineStyle:        lc.LineStyle.Dashed,
-                axisLabelVisible: true,
-                title:            `Fib ${LABELS_FIB[i]}`,
-              });
-              fibLineasRef.current.push(linea);
-            });
-          }
         }
       };
     });
@@ -146,7 +110,6 @@ export default function GraficaVelas({
       chartRef.current     = null;
       seriesRef.current    = null;
       lcRef.current        = null;
-      fibLineasRef.current = [];
       estratLineasRef.current.clear();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
