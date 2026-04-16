@@ -59,3 +59,34 @@ export interface VelaDatos {
   low: number;
   close: number;
 }
+
+// ── Demo: Descomposición Especulativa ─────────────────────────────────────────
+
+// Una estrategia calculada por el backend
+export interface ApuestaDemo {
+  nombre: string;
+  precioEsperado: number;
+  direccion: 'Alcista' | 'Bajista' | 'Neutro';
+  tiempoExpiracion: string;
+}
+
+// Evento "PrediccionesCalculadas" — llega cuando las 3 estrategias terminaron
+export interface PrediccionesCalculadasPayload {
+  estrategias: ApuestaDemo[];
+  tiempoMs: number;
+  modo: string;
+  tick: number;
+}
+
+// Evento "EstrategiaSeleccionada" — la ganadora + las 2 descartadas
+export interface EstrategiaSeleccionadaPayload {
+  seleccionada: ApuestaDemo;
+  descartadas: ApuestaDemo[];
+  tick: number;
+}
+
+// Evento "PortafolioActualizado" — balance tras registrar resultado
+export interface PortafolioActualizadoPayload {
+  balance: number;
+  ultimoEvento: string | null;
+}
