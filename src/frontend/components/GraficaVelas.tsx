@@ -48,7 +48,7 @@ export default function GraficaVelas({
 
       const chart = lc.createChart(containerRef.current, {
         width:  containerRef.current.clientWidth,
-        height: containerRef.current.clientHeight || 500,
+        height: containerRef.current.clientHeight || 520,
         layout: {
           background: { color: '#0f172a' },
           textColor:  '#94a3b8',
@@ -161,33 +161,22 @@ export default function GraficaVelas({
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="bg-slate-800 rounded-xl overflow-hidden h-full flex flex-col">
-      <div className="relative flex-1 min-h-0">
+    <div className="bg-slate-800 rounded-xl overflow-hidden">
+      <div className="relative">
         {/* Precio actual */}
         <div className="absolute top-3 left-4 z-10">
           <span ref={precioActualRef} className="text-3xl font-bold text-white tabular-nums">—</span>
           <span className="ml-2 text-slate-400 text-sm">XAU/USD</span>
         </div>
 
-        {/* Badge modo fuente */}
-        <div className="absolute top-3 right-4 z-10">
-          {modoFuente === 'Swissquote' && (
-            <span className="bg-green-600 text-white text-xs font-semibold px-2 py-1 rounded-full">Swissquote 🟢</span>
-          )}
-          {modoFuente === 'API' && (
-            <span className="bg-blue-600 text-white text-xs font-semibold px-2 py-1 rounded-full">Metals-API 🔵</span>
-          )}
-          {modoFuente === 'CSV' && (
-            <span className="bg-yellow-600 text-white text-xs font-semibold px-2 py-1 rounded-full">Histórico CSV 🟡</span>
-          )}
-        </div>
+        
 
-        <div ref={containerRef} className="w-full h-full" />
+        <div ref={containerRef} className="w-full" style={{ height: 'calc(100vh - 180px)' }} />
       </div>
 
       {/* ── Tarjetas de estrategia — barra compacta ── */}
       {predicciones && predicciones.length > 0 && (
-        <div className="px-3 py-2 border-t border-slate-700 flex-shrink-0 flex items-center gap-2 flex-wrap">
+        <div className="px-3 py-2 border-t border-slate-700 flex items-center gap-2 flex-wrap">
           <span className="text-slate-600 text-xs uppercase tracking-wider font-semibold mr-1">
             Estrategias
           </span>
