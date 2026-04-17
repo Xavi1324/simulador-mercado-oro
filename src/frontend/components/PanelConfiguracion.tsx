@@ -7,12 +7,10 @@ interface PanelConfiguracionProps {
   nucleosDisponibles: number;
   simulacionActiva: boolean;
   isCalculando: boolean;
-  precioActual: number;
   balanceDemo: number;
-  onIniciar: (nucleos: number, intervalo: number) => void;
+  onIniciar: (nucleos: number, intervalo: number, modo: 'Secuencial' | 'Paralelo') => void;
   onPausar: () => void;
   onConfigurar: (nucleos: number, intervalo: number) => void;
-  onEjecutar: (precio: number, modo: string) => void;
 }
 
 export default function PanelConfiguracion({
@@ -20,16 +18,14 @@ export default function PanelConfiguracion({
   nucleosDisponibles,
   simulacionActiva,
   isCalculando,
-  precioActual,
   balanceDemo,
   onIniciar,
   onPausar,
   onConfigurar,
-  onEjecutar,
 }: PanelConfiguracionProps) {
-  const [nucleos, setNucleos]   = useState(1);
+  const [nucleos, setNucleos]     = useState(1);
   const [intervalo, setIntervalo] = useState(2);
-  const [modoDemo, setModoDemo] = useState<'Secuencial' | 'Paralelo'>('Paralelo');
+  const [modoDemo, setModoDemo]   = useState<'Secuencial' | 'Paralelo'>('Paralelo');
 
   useEffect(() => {
     if (simulacionActiva) {
@@ -37,12 +33,6 @@ export default function PanelConfiguracion({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nucleos, intervalo]);
-
-  const handleEjecutar = () => {
-    if (!conectado || isCalculando) return;
-    const precio = precioActual > 0 ? precioActual : 3100;
-    onEjecutar(precio, modoDemo);
-  };
 
   return (
     <div className="bg-slate-800 rounded-xl p-6 space-y-5">
@@ -97,7 +87,7 @@ export default function PanelConfiguracion({
       <div className="flex flex-col gap-2 pt-1">
         {!simulacionActiva ? (
           <button
-            onClick={() => onIniciar(nucleos, intervalo)}
+            onClick={() => onIniciar(nucleos, intervalo, modoDemo)}
             disabled={!conectado}
             className="bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-medium transition-colors"
           >
@@ -139,27 +129,16 @@ export default function PanelConfiguracion({
           ))}
         </div>
 
-        {/* Hint de tiempo */}
+        {/* Hint de tiempo + estado del ciclo */}
         <p className="text-slate-500 text-xs text-center">
-          {modoDemo === 'Paralelo'
-            ? 'Task.WhenAll → ~10 s (3 estrategias simultáneas)'
-            : 'await A → B → C → ~30 s (secuencial)'}
+          {isCalculando
+            ? modoDemo === 'Paralelo'
+              ? 'Calculando 3 estrategias en paralelo...'
+              : 'Calculando 3 estrategias en secuencial...'
+            : modoDemo === 'Paralelo'
+            ? 'Task.WhenAll → ~10 s · ciclo auto cada ~70 s'
+            : 'await A → B → C → ~30 s · ciclo auto cada ~90 s'}
         </p>
-
-        {/* Botón Ejecutar */}
-        <button
-          onClick={handleEjecutar}
-          disabled={!conectado || isCalculando}
-          className={`w-full py-2.5 rounded-lg font-bold text-sm transition-all ${
-            isCalculando
-              ? 'bg-slate-600 text-slate-400 cursor-not-allowed'
-              : !conectado
-              ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
-              : 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/30'
-          }`}
-        >
-          {isCalculando ? 'Calculando...' : `Ejecutar con precio actual`}
-        </button>
 
         {/* Balance demo */}
         <div className="flex items-center justify-between bg-slate-900 rounded-lg px-3 py-2">

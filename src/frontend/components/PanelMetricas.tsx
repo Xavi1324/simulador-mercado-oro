@@ -10,8 +10,8 @@ function SpeedupChart({ datos }: { datos: NuevaMetricaPayload[] }) {
   if (datos.length < 2) return null;
   const maxSpeedup = Math.max(...datos.map((d) => d.speedup), 1);
   const W = 200;
-  const H = 60;
-  const PAD = 5;
+  const H = 50;
+  const PAD = 4;
 
   const puntos = datos.map((d, i) => {
     const x = PAD + (i / (datos.length - 1)) * (W - PAD * 2);
@@ -20,11 +20,11 @@ function SpeedupChart({ datos }: { datos: NuevaMetricaPayload[] }) {
   });
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-14">
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-12">
       <polyline
         points={puntos.join(' ')}
         fill="none"
-        stroke="#3b82f6"
+        stroke="#60a5fa"
         strokeWidth="2"
         strokeLinejoin="round"
         strokeLinecap="round"
@@ -33,28 +33,38 @@ function SpeedupChart({ datos }: { datos: NuevaMetricaPayload[] }) {
   );
 }
 
+function etiquetaEficiencia(eficiencia: number): { texto: string; color: string } {
+  if (eficiencia >= 0.8) return { texto: 'Excelente', color: 'text-green-400' };
+  if (eficiencia >= 0.5) return { texto: 'Buena',     color: 'text-yellow-400' };
+  return                        { texto: 'Mejorable', color: 'text-orange-400' };
+}
+
+function etiquetaLock(pct: number): { texto: string; color: string } {
+  if (pct < 15) return { texto: 'Sin presión',              color: 'text-green-400' };
+  if (pct < 40) return { texto: 'Presión moderada',         color: 'text-yellow-400' };
+  return               { texto: 'Cuello de botella fuerte', color: 'text-red-400' };
+}
+
 export default function PanelMetricas({ onNuevaMetricaRef, metricasIniciales }: PanelMetricasProps) {
   const [historial, setHistorial] = useState<NuevaMetricaPayload[]>([]);
   const [ultima, setUltima] = useState<NuevaMetricaPayload | null>(null);
 
-  // Poblar con datos iniciales si los hay
   useEffect(() => {
     if (metricasIniciales.length > 0) {
       const iniciales: NuevaMetricaPayload[] = metricasIniciales.slice(-20).map((m) => ({
-        speedup:          m.speedup,
-        eficiencia:       m.eficiencia,
-        throughput:       m.decisionesPorSegundo,
-        cuellobotella:    m.porcentajeLock,
-        tiempoParaleloMs: m.tiempoParaleloMs,
+        speedup:           m.speedup,
+        eficiencia:        m.eficiencia,
+        throughput:        m.decisionesPorSegundo,
+        cuellobotella:     m.porcentajeLock,
+        tiempoParaleloMs:  m.tiempoParaleloMs,
         tiempoSecuencialMs: m.tiempoSecuencialMs,
-        nucleos:          m.nucleos,
+        nucleos:           m.nucleos,
       }));
       setHistorial(iniciales);
       setUltima(iniciales[iniciales.length - 1] ?? null);
     }
   }, [metricasIniciales]);
 
-  // Registrar callback de SignalR
   useEffect(() => {
     onNuevaMetricaRef.current = (data: NuevaMetricaPayload) => {
       setUltima(data);
@@ -62,103 +72,108 @@ export default function PanelMetricas({ onNuevaMetricaRef, metricasIniciales }: 
     };
   }, [onNuevaMetricaRef]);
 
-  const cuelloBottella = ultima?.cuellobotella ?? 0;
-  const cuellobotellaPct = Math.min(Math.round(cuelloBottella), 100);
+  const speedup  = ultima?.speedup ?? 0;
+  const nucleos  = ultima?.nucleos ?? 1;
+  const lockPct  = Math.min(Math.round(ultima?.cuellobotella ?? 0), 100);
+  const efic     = ultima?.eficiencia ?? 0;
+  const eficLabel = etiquetaEficiencia(efic);
+  const lockLabel = etiquetaLock(lockPct);
+
+  // Frase resumen en lenguaje natural
+  const fraseSpeedup = speedup >= 1.2
+    ? `El paralelo terminó ${speedup.toFixed(1)}× más rápido`
+    : speedup > 0
+    ? 'Sin diferencia notable aún'
+    : null;
+
+  const fraseNucleos = nucleos > 1
+    ? `${nucleos} agentes en paralelo`
+    : '1 agente (secuencial)';
 
   return (
-    <div className="bg-slate-800 rounded-xl p-6 space-y-4">
-      <h2 className="text-slate-200 font-semibold text-lg">Métricas de rendimiento</h2>
+    <div className="bg-slate-800 rounded-xl p-5 space-y-4">
+      <h2 className="text-slate-200 font-semibold text-lg">Rendimiento</h2>
 
-      {/* Números principales */}
-      <div className="grid grid-cols-3 gap-3 text-center">
-        <div>
-          <p className="text-slate-500 text-xs uppercase tracking-wide mb-1">Speedup</p>
-          <p className="text-5xl font-bold text-blue-400 tabular-nums leading-none">
-            {ultima ? ultima.speedup.toFixed(1) : '0.0'}
-            <span className="text-2xl">×</span>
-          </p>
+      {/* Frase principal */}
+      {fraseSpeedup ? (
+        <div className="bg-slate-900 rounded-lg px-4 py-3">
+          <p className="text-blue-300 font-semibold text-base leading-snug">{fraseSpeedup}</p>
+          <p className="text-slate-500 text-xs mt-0.5">{fraseNucleos}</p>
         </div>
-        <div>
-          <p className="text-slate-500 text-xs uppercase tracking-wide mb-1">Eficiencia</p>
-          <p className="text-3xl font-semibold text-green-400 tabular-nums">
-            {ultima ? Math.round(ultima.eficiencia * 100) : 0}%
-          </p>
+      ) : (
+        <div className="bg-slate-900 rounded-lg px-4 py-3 text-center text-slate-600 text-sm">
+          Esperando primer ciclo…
         </div>
-        <div>
-          <p className="text-slate-500 text-xs uppercase tracking-wide mb-1">Dec/seg</p>
-          <p className="text-2xl font-semibold text-slate-200 tabular-nums">
-            {ultima ? Math.round(ultima.throughput).toLocaleString() : '0'}
-          </p>
+      )}
+
+      {/* Eficiencia + Lock en fila */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-slate-900 rounded-lg px-3 py-2.5">
+          <p className="text-slate-500 text-xs mb-1">Eficiencia de núcleos</p>
+          <p className={`font-bold text-sm ${eficLabel.color}`}>{eficLabel.texto}</p>
+          <p className="text-slate-600 text-xs">{Math.round(efic * 100)}% utilizado</p>
+        </div>
+        <div className="bg-slate-900 rounded-lg px-3 py-2.5">
+          <p className="text-slate-500 text-xs mb-1">Portafolio compartido</p>
+          <p className={`font-bold text-sm ${lockLabel.color}`}>{lockLabel.texto}</p>
+          <p className="text-slate-600 text-xs">{lockPct}% tiempo en espera</p>
         </div>
       </div>
 
-      {/* Barra cuello de botella */}
-      <div>
-        <div className="flex justify-between text-xs text-slate-400 mb-1">
-          <span>Cuello de botella (lock)</span>
-          <span className={cuellobotellaPct > 50 ? 'text-red-400' : 'text-yellow-400'}>
-            {cuellobotellaPct}%
-          </span>
-        </div>
-        <div className="bg-slate-700 rounded-full h-3 overflow-hidden">
-          <div
-            className={`h-full rounded-full transition-all duration-300 ${
-              cuellobotellaPct > 50 ? 'bg-red-500' : 'bg-yellow-500'
-            }`}
-            style={{ width: `${cuellobotellaPct}%` }}
-          />
-        </div>
-      </div>
-
-      {/* Mini gráfica SVG de Speedup */}
-      <div>
-        <p className="text-slate-500 text-xs uppercase tracking-wide mb-1">Speedup (últimos 20 ciclos)</p>
-        <div className="bg-slate-900 rounded-lg p-2">
-          {historial.length >= 2 ? (
+      {/* Gráfica de speedup */}
+      {historial.length >= 2 && (
+        <div>
+          <p className="text-slate-500 text-xs mb-1">Speedup a lo largo del tiempo</p>
+          <div className="bg-slate-900 rounded-lg p-2">
             <SpeedupChart datos={historial} />
-          ) : (
-            <div className="h-14 flex items-center justify-center text-slate-600 text-xs">
-              Esperando datos…
-            </div>
-          )}
+          </div>
+          <div className="flex justify-between text-slate-600 text-xs mt-0.5">
+            <span>más lento</span>
+            <span>{historial.length} ciclos</span>
+            <span>más rápido</span>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Tabla últimas 10 métricas */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm text-slate-300">
-          <thead>
-            <tr className="text-slate-500 uppercase text-xs border-b border-slate-700">
-              <th className="text-left pb-1">Núcleos</th>
-              <th className="text-right pb-1">T.Seq(ms)</th>
-              <th className="text-right pb-1">T.Par(ms)</th>
-              <th className="text-right pb-1">Speedup</th>
-              <th className="text-right pb-1">Efic.</th>
-            </tr>
-          </thead>
-          <tbody>
-            {historial.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="text-center text-slate-600 py-2 text-xs">
-                  Sin datos aún
-                </td>
-              </tr>
-            ) : (
-              [...historial].reverse().slice(0, 10).map((m, i) => (
-                <tr key={i} className="border-b border-slate-700/50">
-                  <td className="py-1">{m.nucleos}</td>
-                  <td className="text-right tabular-nums">{m.tiempoSecuencialMs}</td>
-                  <td className="text-right tabular-nums">{m.tiempoParaleloMs}</td>
-                  <td className="text-right tabular-nums text-blue-400">{m.speedup.toFixed(2)}×</td>
-                  <td className="text-right tabular-nums text-green-400">
-                    {Math.round(m.eficiencia * 100)}%
-                  </td>
+      {/* Últimos ciclos */}
+      {historial.length > 0 && (
+        <div>
+          <p className="text-slate-500 text-xs mb-1">Últimos ciclos</p>
+          <div className="bg-slate-900 rounded-lg overflow-hidden">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="text-slate-600 uppercase">
+                  <th className="px-2 py-1.5 text-left">Núcleos</th>
+                  <th className="px-2 py-1.5 text-right">T.Seq</th>
+                  <th className="px-2 py-1.5 text-right">T.Par</th>
+                  <th className="px-2 py-1.5 text-right">Speedup</th>
+                  <th className="px-2 py-1.5 text-right">Efic.</th>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {[...historial].reverse().slice(0, 8).map((m, i) => (
+                  <tr key={i} className="border-t border-slate-800">
+                    <td className="px-2 py-1 text-slate-300">{m.nucleos}</td>
+                    <td className="px-2 py-1 text-slate-300 text-right">{Math.round(m.tiempoSecuencialMs)}ms</td>
+                    <td className="px-2 py-1 text-slate-300 text-right">{Math.round(m.tiempoParaleloMs)}ms</td>
+                    <td className="px-2 py-1 text-blue-400 text-right font-semibold">{m.speedup.toFixed(2)}×</td>
+                    <td className="px-2 py-1 text-right">
+                      <span className={
+                        m.eficiencia >= 0.8 ? 'text-green-400'
+                        : m.eficiencia >= 0.5 ? 'text-yellow-400'
+                        : 'text-orange-400'
+                      }>
+                        {Math.round(m.eficiencia * 100)}%
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

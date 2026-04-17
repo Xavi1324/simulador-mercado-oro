@@ -128,14 +128,17 @@ export default function GraficaVelas({
     if (!predicciones) return;
 
     predicciones.forEach((est) => {
-      const color = COLORES_ESTRATEGIA[est.nombre] ?? '#ffffff';
+      const color  = COLORES_ESTRATEGIA[est.nombre] ?? '#ffffff';
+      const flecha = est.direccion === 'Alcista' ? '↑' : est.direccion === 'Bajista' ? '↓' : '→';
+      // Título corto sobre la línea — axisLabelVisible:false evita solapamiento con eje Y
+      const titulo = `${est.nombre} ${flecha}`;
       const linea = seriesRef.current.createPriceLine({
         price:            est.precioEsperado,
         color,
         lineWidth:        2,
         lineStyle:        lcRef.current.LineStyle.Solid,
         axisLabelVisible: true,
-        title:            `${est.nombre} ${est.direccion === 'Alcista' ? '↑' : est.direccion === 'Bajista' ? '↓' : '→'}`,
+        title:            titulo,
       });
       estratLineasRef.current.set(est.nombre, linea);
     });

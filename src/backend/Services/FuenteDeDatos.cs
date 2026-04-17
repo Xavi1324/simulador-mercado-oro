@@ -2,56 +2,51 @@ using System.Text.Json;
 
 namespace SimuladorBackend.Services;
 
-public class FuenteDeDatos
+/// <summary>
+/// Única fuente de verdad para el precio XAU/USD.
+/// Cadena de fallback: Swissquote → Metals-API → último precio real conocido.
+/// NUNCA genera precios inventados. Si nunca se obtuvo un precio real, lanza excepción.
+/// </summary>
+public sealed class FuenteDeDatos
 {
-    private readonly IHttpClientFactory _httpClientFactory;
-    private readonly ILogger<FuenteDeDatos> _logger;
-    private readonly string? _apiKey;
-    private readonly List<decimal> _datosCsv = [];
-    private int _tickCsvIndex;
+    private readonly IHttpClientFactory        _httpClientFactory;
+    private readonly ILogger<FuenteDeDatos>    _logger;
+    private readonly string?                   _apiKey;
 
-    // Caché del último precio exitoso de Swissquote
-    private decimal _ultimoPrecioSwissquote;
-    private DateTime _ultimaActualizacionSwissquote = DateTime.MinValue;
-    private static readonly TimeSpan TtlCacheSwissquote = TimeSpan.FromSeconds(15);
+    // Último precio real obtenido de cualquier fuente externa
+    private decimal  _ultimoPrecioReal;
+    private string   _ultimaFuenteReal = string.Empty;
 
     public FuenteDeDatos(IHttpClientFactory httpClientFactory, IConfiguration config, ILogger<FuenteDeDatos> logger)
     {
         _httpClientFactory = httpClientFactory;
-        _logger = logger;
-        _apiKey = config["METALS_API_KEY"];
-        CargarOGenerarCsv();
+        _logger            = logger;
+        _apiKey            = config["METALS_API_KEY"];
     }
 
     public async Task<(decimal precio, string fuente)> ObtenerPrecio()
     {
-        // Nivel 1: Swissquote (gratuito, sin API key, siempre primero)
+        // Nivel 1: Swissquote (gratuito, sin API key)
         try
         {
             decimal precio = await ObtenerDeSwissquote();
-            _ultimoPrecioSwissquote = precio;
-            _ultimaActualizacionSwissquote = DateTime.UtcNow;
+            _ultimoPrecioReal  = precio;
+            _ultimaFuenteReal  = "Swissquote";
             return (precio, "Swissquote");
         }
         catch (Exception ex)
         {
             _logger.LogWarning("Swissquote falló: {Error}", ex.Message);
-
-            // Si tenemos un precio en caché reciente, usarlo para evitar parpadeo
-            if (_ultimoPrecioSwissquote > 0 &&
-                DateTime.UtcNow - _ultimaActualizacionSwissquote < TtlCacheSwissquote)
-            {
-                _logger.LogInformation("Usando precio Swissquote en caché: {Precio}", _ultimoPrecioSwissquote);
-                return (_ultimoPrecioSwissquote, "Swissquote");
-            }
         }
 
-        // Nivel 2: Metals-API (solo si hay API key configurada)
+        // Nivel 2: Metals-API (requiere API key)
         if (!string.IsNullOrWhiteSpace(_apiKey))
         {
             try
             {
                 decimal precio = await ObtenerDeMetalsApi();
+                _ultimoPrecioReal = precio;
+                _ultimaFuenteReal = "API";
                 return (precio, "API");
             }
             catch (Exception ex)
@@ -60,11 +55,22 @@ public class FuenteDeDatos
             }
         }
 
-        // Nivel 3: CSV histórico (fallback final)
-        return (ObtenerDeCsv(), "CSV");
+        // Nivel 3: último precio real conocido (sin inventar nada)
+        if (_ultimoPrecioReal > 0)
+        {
+            _logger.LogWarning(
+                "Todas las fuentes fallaron. Usando último precio real ({Fuente}): {Precio}",
+                _ultimaFuenteReal, _ultimoPrecioReal);
+            return (_ultimoPrecioReal, _ultimaFuenteReal);
+        }
+
+        // Sin precio real disponible — lanzar para que el tick se omita y reintente
+        throw new InvalidOperationException(
+            "No se pudo obtener el precio XAU/USD de ninguna fuente real. " +
+            "Verifica la conectividad con Swissquote.");
     }
 
-    // ── Fuentes de datos ──────────────────────────────────────────────────────
+    // ── Swissquote ────────────────────────────────────────────────────────────
 
     private async Task<decimal> ObtenerDeSwissquote()
     {
@@ -74,30 +80,63 @@ public class FuenteDeDatos
         client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (compatible; SimuladorOro/1.0)");
         client.DefaultRequestHeaders.Add("Accept", "application/json");
 
-        const string url = "https://forex-data-feed.swissquote.com/public-quotes/bboquotes/instrument/XAU/USD";
+        const string url =
+            "https://forex-data-feed.swissquote.com/public-quotes/bboquotes/instrument/XAU/USD";
+
         using var response = await client.GetAsync(url);
         response.EnsureSuccessStatusCode();
 
         using var stream = await response.Content.ReadAsStreamAsync();
         using var doc    = await JsonDocument.ParseAsync(stream);
 
-        // Estructura: array de plataformas → primera → spreadProfilePrices → perfil "standard"
-        var perfiles = doc.RootElement[0].GetProperty("spreadProfilePrices");
+        // La respuesta es un array de servidores. Cada servidor tiene spreadProfilePrices[].
+        // Iteramos todos los servidores buscando el perfil "standard".
+        // Si ninguno lo tiene, tomamos el primer bid/ask disponible de cualquier servidor.
+        var root = doc.RootElement;
+        var servidores = root.ValueKind == JsonValueKind.Array
+            ? root.EnumerateArray().ToList()
+            : root.TryGetProperty("value", out var v) ? v.EnumerateArray().ToList() : [];
 
-        foreach (var perfil in perfiles.EnumerateArray())
+        double? primerBid = null, primerAsk = null;
+
+        foreach (var servidor in servidores)
         {
-            if (perfil.GetProperty("spreadProfile").GetString() == "standard")
+            if (!servidor.TryGetProperty("spreadProfilePrices", out var perfiles)) continue;
+
+            foreach (var perfil in perfiles.EnumerateArray())
             {
                 double bid = perfil.GetProperty("bid").GetDouble();
                 double ask = perfil.GetProperty("ask").GetDouble();
-                decimal mid = Math.Round((decimal)((bid + ask) / 2.0), 2);
-                _logger.LogInformation("Swissquote OK: bid={Bid} ask={Ask} mid={Mid}", bid, ask, mid);
-                return mid > 0 ? mid : throw new InvalidDataException("Precio Swissquote inválido");
+
+                // Guardar el primer par bid/ask válido como fallback
+                if (primerBid is null && bid > 0 && ask > 0)
+                {
+                    primerBid = bid;
+                    primerAsk = ask;
+                }
+
+                // Preferir el perfil "standard" si existe en algún servidor
+                if (perfil.GetProperty("spreadProfile").GetString() == "standard" && bid > 0 && ask > 0)
+                {
+                    decimal mid = Math.Round((decimal)((bid + ask) / 2.0), 2);
+                    _logger.LogInformation("Swissquote OK (standard): bid={Bid} ask={Ask} mid={Mid}", bid, ask, mid);
+                    return mid;
+                }
             }
         }
 
-        throw new InvalidDataException("Perfil 'standard' no encontrado en respuesta Swissquote");
+        // Sin perfil "standard" → usar el primer bid/ask encontrado
+        if (primerBid is not null && primerAsk is not null)
+        {
+            decimal mid = Math.Round((decimal)((primerBid.Value + primerAsk.Value) / 2.0), 2);
+            _logger.LogInformation("Swissquote OK (primer perfil disponible): bid={Bid} ask={Ask} mid={Mid}", primerBid, primerAsk, mid);
+            return mid > 0 ? mid : throw new InvalidDataException("Precio Swissquote inválido (≤0)");
+        }
+
+        throw new InvalidDataException("No se encontró ningún bid/ask válido en la respuesta de Swissquote.");
     }
+
+    // ── Metals-API ────────────────────────────────────────────────────────────
 
     private async Task<decimal> ObtenerDeMetalsApi()
     {
@@ -118,66 +157,6 @@ public class FuenteDeDatos
 
         return xauRate > 0
             ? Math.Round((decimal)(1.0 / xauRate), 2)
-            : throw new InvalidDataException("XAU rate inválido");
-    }
-
-    // ── CSV ───────────────────────────────────────────────────────────────────
-
-    private decimal ObtenerDeCsv()
-    {
-        if (_datosCsv.Count == 0) return 3100m;
-        decimal precio = _datosCsv[_tickCsvIndex % _datosCsv.Count];
-        _tickCsvIndex++;
-        return precio;
-    }
-
-    private void CargarOGenerarCsv()
-    {
-        const string ruta = "metrics/gold_historical.csv";
-
-        if (!File.Exists(ruta))
-            GenerarCsvSimulado(ruta);
-
-        foreach (string linea in File.ReadLines(ruta).Skip(1))
-        {
-            var partes = linea.Split(',');
-            if (partes.Length >= 5 && decimal.TryParse(partes[4],
-                System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture,
-                out decimal close))
-            {
-                _datosCsv.Add(close);
-            }
-        }
-    }
-
-    private static void GenerarCsvSimulado(string ruta)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(ruta)!);
-
-        var rng  = new Random(42);
-        var sb   = new System.Text.StringBuilder();
-        sb.AppendLine("timestamp,open,high,low,close,volume");
-
-        decimal precio = 3100m;
-        var fecha = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-
-        for (int i = 0; i < 500; i++)
-        {
-            decimal variacion = (decimal)(rng.NextDouble() * 100 - 50);
-            decimal open  = precio;
-            decimal close = Math.Max(2800m, Math.Min(3500m, precio + variacion));
-            decimal high  = Math.Max(open, close) + (decimal)(rng.NextDouble() * 10);
-            decimal low   = Math.Min(open, close) - (decimal)(rng.NextDouble() * 10);
-            int volume    = rng.Next(1000, 5000);
-
-            sb.AppendLine(FormattableString.Invariant(
-                $"{fecha:yyyy-MM-ddTHH:mm:ssZ},{open:F2},{high:F2},{low:F2},{close:F2},{volume}"));
-
-            precio = close;
-            fecha  = fecha.AddMinutes(5);
-        }
-
-        File.WriteAllText(ruta, sb.ToString());
+            : throw new InvalidDataException("XAU rate inválido de Metals-API.");
     }
 }

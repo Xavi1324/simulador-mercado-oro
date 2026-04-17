@@ -8,7 +8,8 @@ namespace SimuladorBackend.Services;
 /// Secuencial: Agresiva → Conservadora → Tendencia  (~30 s)
 /// Paralelo:   Task.WhenAll(Agresiva, Conservadora, Tendencia)  (~10 s)
 ///
-/// La diferencia de tiempo es la demostración visual del paralelismo.
+/// La selección de la estrategia ganadora es ALEATORIA para demostrar
+/// que la especulación puede acertar o fallar — no siempre gana la misma.
 /// </summary>
 public sealed class SimuladorService
 {
@@ -21,6 +22,7 @@ public sealed class SimuladorService
     public async Task<ResultadoEspeculacion> EjecutarAsync(
         decimal precioActual,
         ModoEjecucion modo,
+        IReadOnlyList<decimal> historial,
         CancellationToken ct = default)
     {
         var sw = Stopwatch.StartNew();
@@ -28,25 +30,25 @@ public sealed class SimuladorService
 
         if (modo == ModoEjecucion.Secuencial)
         {
-            // Una tras otra — demuestra el cuello de botella secuencial
-            var a = await _estrategias.CalcularAgresiva(precioActual, ct);
-            var c = await _estrategias.CalcularConservadora(precioActual, ct);
-            var t = await _estrategias.CalcularTendencia(precioActual, ct);
+            // Una tras otra — demuestra el cuello de botella secuencial (~30 s)
+            var a = await _estrategias.CalcularAgresiva    (precioActual, historial, ct);
+            var c = await _estrategias.CalcularConservadora(precioActual, historial, ct);
+            var t = await _estrategias.CalcularTendencia   (precioActual, historial, ct);
             todas = [a, c, t];
         }
         else
         {
-            // Paralelo con Task.WhenAll — descomposición especulativa real
-            var tA = _estrategias.CalcularAgresiva(precioActual, ct);
-            var tC = _estrategias.CalcularConservadora(precioActual, ct);
-            var tT = _estrategias.CalcularTendencia(precioActual, ct);
-            var resultados = await Task.WhenAll(tA, tC, tT);
-            todas = [.. resultados];
+            // Paralelo con Task.WhenAll — descomposición especulativa (~10 s)
+            var tA = _estrategias.CalcularAgresiva    (precioActual, historial, ct);
+            var tC = _estrategias.CalcularConservadora(precioActual, historial, ct);
+            var tT = _estrategias.CalcularTendencia   (precioActual, historial, ct);
+            todas = [.. await Task.WhenAll(tA, tC, tT)];
         }
 
         sw.Stop();
 
-        var seleccionada = SeleccionarMasCercana(todas, precioActual);
+        // Selección ALEATORIA — no siempre gana la misma estrategia
+        var seleccionada = SeleccionarAleatoria(todas);
         var descartadas  = todas.Where(x => x.Nombre != seleccionada.Nombre).ToList();
 
         return new ResultadoEspeculacion
@@ -59,9 +61,9 @@ public sealed class SimuladorService
         };
     }
 
-    // La estrategia cuyo precio esperado más se acerca al precio actual gana
-    private static ApuestaDemo SeleccionarMasCercana(List<ApuestaDemo> candidatas, decimal precioActual)
-        => candidatas.OrderBy(x => Math.Abs(x.PrecioEsperado - precioActual)).First();
+    // Selección aleatoria entre las 3 estrategias calculadas
+    private static ApuestaDemo SeleccionarAleatoria(List<ApuestaDemo> candidatas)
+        => candidatas[Random.Shared.Next(candidatas.Count)];
 }
 
 /// <summary>Resultado de un ciclo completo de especulación.</summary>

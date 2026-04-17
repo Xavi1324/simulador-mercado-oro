@@ -40,7 +40,6 @@ export default function Home() {
     estrategiaSeleccionada,
     balanceDemo,
     logsDemo,
-    ejecutar,
   } = useSimuladorHub();
 
   const [nucleosDisponibles, setNucleosDisponibles] = useState(4);
@@ -64,8 +63,8 @@ export default function Home() {
     }
   }, [estadoInicial]);
 
-  const handleIniciar = (nucleos: number, intervalo: number) => {
-    iniciar(nucleos, intervalo);
+  const handleIniciar = (nucleos: number, intervalo: number, modo: 'Secuencial' | 'Paralelo') => {
+    iniciar(nucleos, intervalo, modo);
     setSimulacionActiva(true);
   };
 
@@ -121,17 +120,14 @@ export default function Home() {
 
       {/* Layout principal */}
       <main className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Gráfica — 2/3 del ancho, con overlay de cálculo */}
-        <div className="lg:col-span-2 relative">
+        {/* Gráfica — 2/3 del ancho */}
+        <div className="lg:col-span-2">
           <GraficaVelas
             onNuevoPrecioRef={onNuevoPrecioRef}
             modoFuente={modoFuente}
             predicciones={predicciones}
             estrategiaSeleccionada={estrategiaSeleccionada}
           />
-          {isCalculando && (
-            <OverlayCalculando modo={modoDemo} />
-          )}
         </div>
 
         {/* Paneles laterales */}
@@ -141,12 +137,10 @@ export default function Home() {
             nucleosDisponibles={nucleosDisponibles}
             simulacionActiva={simulacionActiva}
             isCalculando={isCalculando}
-            precioActual={precioActual}
             balanceDemo={balanceDemo}
             onIniciar={handleIniciar}
             onPausar={handlePausar}
             onConfigurar={configurar}
-            onEjecutar={ejecutar}
           />
           <PanelMetricas
             onNuevaMetricaRef={onNuevaMetricaRef}
@@ -154,6 +148,9 @@ export default function Home() {
           />
         </div>
       </main>
+
+      {/* Toast no bloqueante — aparece en esquina inferior derecha */}
+      <OverlayCalculando modo={modoDemo} visible={isCalculando} />
 
       {/* Logs de especulación — panel inferior */}
       {logsDemo.length > 0 && (

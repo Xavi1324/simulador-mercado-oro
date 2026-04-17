@@ -90,3 +90,4 @@ export interface PortafolioActualizadoPayload {
   balance: number;
   ultimoEvento: string | null;
 }
+
