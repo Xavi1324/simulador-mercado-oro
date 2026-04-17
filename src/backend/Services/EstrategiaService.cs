@@ -36,12 +36,15 @@ public sealed class EstrategiaService
         return Task.Run(() =>
         {
             double estimado = MonteCarloAgresiva(arr, p0, Iteraciones, ct);
-            decimal esperado = Math.Round((decimal)estimado, 2);
+            // Agresiva → siempre Alcista: precio esperado > precio actual
+            double delta = Math.Abs(estimado - p0);
+            if (delta < 0.50) delta = 0.50; // mínimo $0.50 de movimiento al alza
+            decimal esperado = Math.Round((decimal)(p0 + delta), 2);
             return new ApuestaDemo
             {
                 Nombre           = "Agresiva",
                 PrecioEsperado   = esperado,
-                Direccion        = Direccion(esperado, precioActual),
+                Direccion        = DireccionApuesta.Alcista,
                 TiempoExpiracion = TimeSpan.FromMinutes(1),
                 MomentoCreacion  = DateTime.UtcNow,
             };
@@ -59,12 +62,15 @@ public sealed class EstrategiaService
         return Task.Run(() =>
         {
             double estimado = MonteCarloConservadora(arr, p0, Iteraciones, ct);
-            decimal esperado = Math.Round((decimal)estimado, 2);
+            // Conservadora → Neutro: precio esperado cerca del actual (±0.3%)
+            double maxDelta = p0 * 0.003;
+            double delta    = Math.Max(-maxDelta, Math.Min(maxDelta, estimado - p0));
+            decimal esperado = Math.Round((decimal)(p0 + delta), 2);
             return new ApuestaDemo
             {
                 Nombre           = "Conservadora",
                 PrecioEsperado   = esperado,
-                Direccion        = Direccion(esperado, precioActual),
+                Direccion        = DireccionApuesta.Neutro,
                 TiempoExpiracion = TimeSpan.FromMinutes(1),
                 MomentoCreacion  = DateTime.UtcNow,
             };
@@ -82,12 +88,15 @@ public sealed class EstrategiaService
         return Task.Run(() =>
         {
             double estimado = MonteCarloTendencia(arr, p0, Iteraciones, ct);
-            decimal esperado = Math.Round((decimal)estimado, 2);
+            // Tendencia → siempre Bajista: precio esperado < precio actual
+            double delta = Math.Abs(estimado - p0);
+            if (delta < 0.50) delta = 0.50; // mínimo $0.50 de movimiento a la baja
+            decimal esperado = Math.Round((decimal)(p0 - delta), 2);
             return new ApuestaDemo
             {
                 Nombre           = "Tendencia",
                 PrecioEsperado   = esperado,
-                Direccion        = Direccion(esperado, precioActual),
+                Direccion        = DireccionApuesta.Bajista,
                 TiempoExpiracion = TimeSpan.FromMinutes(1),
                 MomentoCreacion  = DateTime.UtcNow,
             };

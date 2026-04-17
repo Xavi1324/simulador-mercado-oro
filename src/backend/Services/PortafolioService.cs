@@ -10,7 +10,7 @@ namespace SimuladorBackend.Services;
 public sealed class PortafolioService
 {
     private readonly object      _lock     = new();
-    private          decimal     _balance  = 10_000m;
+    private          decimal     _balance  = 1_000m;
     private readonly List<string> _historial = [];
 
     public decimal Balance
@@ -42,7 +42,7 @@ public sealed class PortafolioService
     {
         lock (_lock)
         {
-            _balance = 10_000m;
+            _balance = 1_000m;
             _historial.Clear();
         }
     }

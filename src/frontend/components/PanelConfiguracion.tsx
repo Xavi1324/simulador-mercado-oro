@@ -35,10 +35,10 @@ export default function PanelConfiguracion({
   }, [nucleos, intervalo]);
 
   return (
-    <div className="bg-slate-800 rounded-xl p-6 space-y-5">
+    <div className="bg-slate-800 rounded-xl p-4 space-y-3">
       {/* Encabezado */}
       <div className="flex items-center justify-between">
-        <h2 className="text-slate-200 font-semibold text-lg">Configuración</h2>
+        <h2 className="text-slate-200 font-semibold text-base">Configuración</h2>
         <div className="flex items-center gap-2">
           <div className={`w-2 h-2 rounded-full ${conectado ? 'bg-green-400' : 'bg-red-400'}`} />
           <span className="text-slate-400 text-xs">{conectado ? 'Conectado' : 'Sin conexión'}</span>
@@ -105,7 +105,7 @@ export default function PanelConfiguracion({
       </div>
 
       {/* ── Demo: Descomposición Especulativa ─────────────────────────────── */}
-      <div className="border-t border-slate-700 pt-4 space-y-3">
+      <div className="border-t border-slate-700 pt-3 space-y-2">
         <p className="text-slate-400 text-xs uppercase tracking-wider font-semibold">
           Demo Especulativa
         </p>
@@ -145,7 +145,7 @@ export default function PanelConfiguracion({
           <span className="text-slate-400 text-xs">Portafolio demo</span>
           <span
             className={`text-sm font-bold font-mono ${
-              balanceDemo >= 10_000 ? 'text-green-400' : 'text-red-400'
+              balanceDemo >= 1_000 ? 'text-green-400' : 'text-red-400'
             }`}
           >
             ${balanceDemo.toFixed(2)}

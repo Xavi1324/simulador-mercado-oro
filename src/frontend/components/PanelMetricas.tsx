@@ -91,8 +91,8 @@ export default function PanelMetricas({ onNuevaMetricaRef, metricasIniciales }: 
     : '1 agente (secuencial)';
 
   return (
-    <div className="bg-slate-800 rounded-xl p-5 space-y-4">
-      <h2 className="text-slate-200 font-semibold text-lg">Rendimiento</h2>
+    <div className="bg-slate-800 rounded-xl p-4 space-y-3">
+      <h2 className="text-slate-200 font-semibold text-base">Rendimiento</h2>
 
       {/* Frase principal */}
       {fraseSpeedup ? (

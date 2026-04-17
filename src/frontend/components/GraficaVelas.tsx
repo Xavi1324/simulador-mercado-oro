@@ -48,7 +48,7 @@ export default function GraficaVelas({
 
       const chart = lc.createChart(containerRef.current, {
         width:  containerRef.current.clientWidth,
-        height: 400,
+        height: containerRef.current.clientHeight || 500,
         layout: {
           background: { color: '#0f172a' },
           textColor:  '#94a3b8',
@@ -73,7 +73,10 @@ export default function GraficaVelas({
 
       observerRef = new ResizeObserver(() => {
         if (containerRef.current && chartRef.current) {
-          chartRef.current.applyOptions({ width: containerRef.current.clientWidth });
+          chartRef.current.applyOptions({
+            width:  containerRef.current.clientWidth,
+            height: containerRef.current.clientHeight,
+          });
         }
       });
       observerRef.observe(containerRef.current);
@@ -158,8 +161,8 @@ export default function GraficaVelas({
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="bg-slate-800 rounded-xl overflow-hidden">
-      <div className="relative">
+    <div className="bg-slate-800 rounded-xl overflow-hidden h-full flex flex-col">
+      <div className="relative flex-1 min-h-0">
         {/* Precio actual */}
         <div className="absolute top-3 left-4 z-10">
           <span ref={precioActualRef} className="text-3xl font-bold text-white tabular-nums">—</span>
@@ -179,56 +182,50 @@ export default function GraficaVelas({
           )}
         </div>
 
-        <div ref={containerRef} className="w-full" style={{ height: 400 }} />
+        <div ref={containerRef} className="w-full h-full" />
       </div>
 
-      {/* ── Tarjetas de estrategia ── */}
+      {/* ── Tarjetas de estrategia — barra compacta ── */}
       {predicciones && predicciones.length > 0 && (
-        <div className="px-4 pb-4 pt-3 border-t border-slate-700">
-          <p className="text-xs text-slate-500 mb-2 uppercase tracking-wider font-semibold">
-            Estrategias especulativas
-          </p>
-          <div className="flex gap-3 flex-wrap">
-            {predicciones.map((est) => {
-              const descartada =
-                estrategiaSeleccionada !== null &&
-                est.nombre !== estrategiaSeleccionada.nombre;
-              const seleccionada =
-                estrategiaSeleccionada?.nombre === est.nombre;
-              const color = COLORES_ESTRATEGIA[est.nombre] ?? '#fff';
+        <div className="px-3 py-2 border-t border-slate-700 flex-shrink-0 flex items-center gap-2 flex-wrap">
+          <span className="text-slate-600 text-xs uppercase tracking-wider font-semibold mr-1">
+            Estrategias
+          </span>
+          {predicciones.map((est) => {
+            const descartada =
+              estrategiaSeleccionada !== null &&
+              est.nombre !== estrategiaSeleccionada.nombre;
+            const seleccionada =
+              estrategiaSeleccionada?.nombre === est.nombre;
+            const color = COLORES_ESTRATEGIA[est.nombre] ?? '#fff';
+            const flecha = est.direccion === 'Alcista' ? '↑' : est.direccion === 'Bajista' ? '↓' : '→';
 
-              return (
-                <div
-                  key={est.nombre}
-                  style={{
-                    borderColor: color,
-                    opacity: descartada ? 0 : 1,
-                    transition: 'opacity 0.6s ease-out',
-                  }}
-                  className={`border-2 rounded-lg px-4 py-2 min-w-[140px] ${
-                    seleccionada ? 'bg-slate-700' : 'bg-slate-800'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-bold" style={{ color }}>
-                      {est.nombre}
-                    </span>
-                    {seleccionada && (
-                      <span className="text-xs bg-green-700 text-green-100 px-1.5 py-0.5 rounded ml-2">
-                        ELEGIDA
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-slate-100 font-mono text-sm font-semibold">
-                    ${est.precioEsperado.toFixed(2)}
-                  </p>
-                  <p className="text-slate-400 text-xs mt-0.5">
-                    {est.direccion} · {est.tiempoExpiracion}
-                  </p>
-                </div>
-              );
-            })}
-          </div>
+            return (
+              <div
+                key={est.nombre}
+                style={{
+                  borderColor: color,
+                  opacity: descartada ? 0 : 1,
+                  transition: 'opacity 0.5s ease-out',
+                }}
+                className={`border rounded-lg px-3 py-1 flex items-center gap-2 ${
+                  seleccionada ? 'bg-slate-700' : 'bg-slate-800/60'
+                }`}
+              >
+                <span className="text-xs font-bold" style={{ color }}>
+                  {est.nombre} {flecha}
+                </span>
+                <span className="text-slate-200 font-mono text-xs font-semibold">
+                  ${est.precioEsperado.toFixed(2)}
+                </span>
+                {seleccionada && (
+                  <span className="text-xs bg-green-700 text-green-100 px-1.5 py-0.5 rounded">
+                    ✓
+                  </span>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
