@@ -17,17 +17,6 @@ export interface NuevaMetricaPayload {
   nucleos: number;
 }
 
-// Evento ResultadoTick (servidor → cliente)
-export interface ResultadoTickPayload {
-  agente: number;
-  estrategia: string;
-  precioEsperado: number;
-  precioReal: number;
-  ganancia: number;
-  esGanadora: boolean;
-  portafolioTotal: number;
-}
-
 // Evento EstadoInicial (servidor → cliente, al conectar)
 export interface EstadoInicialPayload {
   simulacionActiva: boolean;

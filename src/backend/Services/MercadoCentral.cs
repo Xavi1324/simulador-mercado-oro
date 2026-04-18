@@ -27,12 +27,7 @@ public sealed class MercadoCentral : BackgroundService
     private volatile int           _intervaloSegundos  = 2;
     private          ModoEjecucion _modoEspeculacion   = ModoEjecucion.Paralelo;
 
-    private List<Agente> _agentes     = [];
-    private readonly object _agentesLock = new();
-
-    private Apuesta[]? _apuestasPrevias;
     private int        _numeroTick;
-    private const decimal MargenAceptable = 5m;
 
     // Precio actual y historial
     private decimal _ultimoPrecio;
@@ -68,8 +63,6 @@ public sealed class MercadoCentral : BackgroundService
         _intervaloSegundos = Math.Max(1, intervaloSegundos);
         _modoEspeculacion  = ResolverModo(_nucleos);
         _portafolioService.Reiniciar();
-        lock (_agentesLock)
-            _agentes = Enumerable.Range(0, _nucleos).Select(i => new Agente(i)).ToList();
         _activo = true;
         _logger.LogInformation("Simulación iniciada: {N} núcleos, {I}s, modo={M}", _nucleos, _intervaloSegundos, _modoEspeculacion);
     }
@@ -86,8 +79,6 @@ public sealed class MercadoCentral : BackgroundService
         _nucleos           = Math.Max(1, nucleos);
         _intervaloSegundos = Math.Max(1, intervaloSegundos);
         _modoEspeculacion  = ResolverModo(_nucleos);
-        lock (_agentesLock)
-            _agentes = Enumerable.Range(0, _nucleos).Select(i => new Agente(i)).ToList();
     }
 
     public bool EstaActivo => _activo;
@@ -155,39 +146,6 @@ public sealed class MercadoCentral : BackgroundService
         }, ct);
 
         if (!_activo) return;
-
-        if (_apuestasPrevias is { Length: > 0 })
-            await EvaluarApuestas(_apuestasPrevias, tick, ct);
-
-        IReadOnlyList<Agente> snapshot;
-        lock (_agentesLock) { snapshot = [.._agentes]; }
-
-        var historial = ObtenerHistorial();
-        var resultado = await _metricasEngine.MedirCiclo(tick, historial, snapshot, _portafolio, _nucleos, ct);
-
-        await _hub.Clients.All.SendAsync("NuevaMetrica", new
-        {
-            speedup            = resultado.Metrica.Speedup,
-            eficiencia         = resultado.Metrica.Eficiencia,
-            throughput         = resultado.Metrica.DecisionesPorSegundo,
-            cuellobotella      = resultado.Metrica.PorcentajeLock,
-            tiempoParaleloMs   = resultado.Metrica.TiempoParaleloMs,
-            tiempoSecuencialMs = resultado.Metrica.TiempoSecuencialMs,
-            nucleos            = resultado.Metrica.Nucleos,
-        }, ct);
-
-        await EmitirConsoleLog("info", "metricas",
-            $"Tick #{tick.NumeroTick}: secuencial {resultado.Metrica.TiempoSecuencialMs} ms | paralelo {resultado.Metrica.TiempoParaleloMs} ms | speedup {resultado.Metrica.Speedup:F2}x | eficiencia {resultado.Metrica.Eficiencia * 100:F2}%",
-            ct,
-            tick: tick.NumeroTick,
-            nucleos: _nucleos,
-            modo: _modoEspeculacion,
-            speedup: resultado.Metrica.Speedup,
-            eficiencia: resultado.Metrica.Eficiencia,
-            tiempoSecuencialMs: resultado.Metrica.TiempoSecuencialMs,
-            tiempoParaleloMs: resultado.Metrica.TiempoParaleloMs);
-
-        _apuestasPrevias = resultado.ApuestasActuales;
     }
 
     // ── Bucle 2: ciclo especulativo automático ────────────────────────────────
@@ -236,7 +194,14 @@ public sealed class MercadoCentral : BackgroundService
             new { modo = modo.ToString(), timestamp = DateTime.UtcNow }, ct);
 
         // 2. Calcular las 3 estrategias (10s cada una)
-        var resultado = await _simuladorService.EjecutarAsync(precioAlApostar, modo, historial, ct);
+        var resultado = await _simuladorService.EjecutarAsync(precioAlApostar, modo, historial, _nucleos, ct);
+        var metrica = _metricasEngine.RegistrarMetrica(
+            _nucleos,
+            resultado.TickNumero,
+            resultado.TiempoSecuencialMs,
+            resultado.TiempoParaleloMs,
+            precioAlApostar,
+            _portafolio.Saldo);
 
         // 3. Emitir las 3 predicciones calculadas
         var todasDto = new[] { resultado.EstrategiaSeleccionada }
@@ -252,13 +217,27 @@ public sealed class MercadoCentral : BackgroundService
             tick        = resultado.TickNumero,
         }, ct);
 
-        await EmitirConsoleLog("info", "benchmark",
-            $"Estrategias calculadas en {resultado.TiempoEjecucionMs} ms usando modo {resultado.Modo}",
+        await _hub.Clients.All.SendAsync("NuevaMetrica", new
+        {
+            speedup            = metrica.Speedup,
+            eficiencia         = metrica.Eficiencia,
+            throughput         = metrica.DecisionesPorSegundo,
+            cuellobotella      = metrica.PorcentajeLock,
+            tiempoParaleloMs   = metrica.TiempoParaleloMs,
+            tiempoSecuencialMs = metrica.TiempoSecuencialMs,
+            nucleos            = metrica.Nucleos,
+        }, ct);
+
+        await EmitirConsoleLog("info", "metricas",
+            $"Cálculo real #{resultado.TickNumero}: secuencial {metrica.TiempoSecuencialMs} ms | paralelo {metrica.TiempoParaleloMs} ms | speedup {metrica.Speedup:F2}x | eficiencia {metrica.Eficiencia * 100:F2}%",
             ct,
             tick: resultado.TickNumero,
             nucleos: _nucleos,
             modo: resultado.Modo,
-            tiempoParaleloMs: resultado.TiempoEjecucionMs);
+            speedup: metrica.Speedup,
+            eficiencia: metrica.Eficiencia,
+            tiempoSecuencialMs: metrica.TiempoSecuencialMs,
+            tiempoParaleloMs: metrica.TiempoParaleloMs);
 
         // 4. Emitir la estrategia elegida (las otras 2 se desvanecen en el frontend)
         await _hub.Clients.All.SendAsync("EstrategiaSeleccionada", new
@@ -379,7 +358,7 @@ public sealed class MercadoCentral : BackgroundService
             DireccionApuesta.Bajista => precioFinal <= apuesta.PrecioEsperado,
             DireccionApuesta.Neutro when apuesta.EsRango =>
                 precioFinal >= apuesta.PrecioMin!.Value && precioFinal <= apuesta.PrecioMax!.Value,
-            _ => Math.Abs(precioFinal - apuesta.PrecioEsperado) <= MargenAceptable,
+            _ => precioFinal == apuesta.PrecioEsperado,
         };
 
     private static string DescribirCondicion(ApuestaEspeculativa apuesta, decimal precioFinal) =>
@@ -394,32 +373,6 @@ public sealed class MercadoCentral : BackgroundService
             _ =>
                 $"objetivo ${apuesta.PrecioEsperado:N2}, final ${precioFinal:N2}",
         };
-
-    // ── Evaluación de apuestas del loop de agentes ────────────────────────────
-
-    private async Task EvaluarApuestas(Apuesta[] apuestas, Tick tickActual, CancellationToken ct)
-    {
-        foreach (var apuesta in apuestas)
-        {
-            decimal diferencia = Math.Abs(tickActual.Precio - apuesta.PrecioEsperado);
-            bool esGanadora    = diferencia <= MargenAceptable;
-            decimal ganancia   = diferencia * apuesta.Volumen;
-
-            apuesta.GananciaReal = esGanadora ? ganancia : -ganancia;
-            apuesta.EsGanadora   = esGanadora;
-
-            await _hub.Clients.All.SendAsync("ResultadoTick", new
-            {
-                agente          = apuesta.AgenteId,
-                estrategia      = apuesta.Estrategia,
-                precioEsperado  = (double)apuesta.PrecioEsperado,
-                precioReal      = (double)tickActual.Precio,
-                ganancia        = (double)apuesta.GananciaReal,
-                esGanadora      = apuesta.EsGanadora,
-                portafolioTotal = (double)_portafolio.Saldo,
-            }, ct);
-        }
-    }
 
     // ── Historial ─────────────────────────────────────────────────────────────
 

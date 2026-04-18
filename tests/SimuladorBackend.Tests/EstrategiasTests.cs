@@ -5,6 +5,25 @@ namespace SimuladorBackend.Tests;
 
 public class EstrategiasTests
 {
+    [Fact]
+    public void MetricasEngine_RegistraMetricasDelCalculoReal()
+    {
+        var engine = new MetricasEngine();
+
+        var metrica = engine.RegistrarMetrica(
+            nucleos: 4,
+            tickNumero: 7,
+            tiempoSecuencialMs: 400,
+            tiempoParaleloMs: 100,
+            precioOro: 3000m,
+            saldoPortafolio: 1000m);
+
+        Assert.Equal(4.0, metrica.Speedup, precision: 2);
+        Assert.Equal(1.0, metrica.Eficiencia, precision: 2);
+        Assert.Equal(0, metrica.PorcentajeLock);
+        Assert.Single(engine.ObtenerUltimasMetricas(10));
+    }
+
     // ── EstrategiaAgresiva ────────────────────────────────────────────────
 
     [Fact]

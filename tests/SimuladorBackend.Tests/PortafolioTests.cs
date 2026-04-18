@@ -6,7 +6,7 @@ namespace SimuladorBackend.Tests;
 
 public class PortafolioTests
 {
-    private static Apuesta ApuestaFalsa() => new() { AgenteId = 0, Estrategia = "Test" };
+    private static Apuesta ApuestaFalsa() => new() { Estrategia = "Test" };
 
     [Fact]
     public void SaldoInicial_Es1000()

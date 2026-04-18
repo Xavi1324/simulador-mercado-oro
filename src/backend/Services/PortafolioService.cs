@@ -27,7 +27,6 @@ public sealed class PortafolioService
     {
         var apuesta = new Apuesta
         {
-            AgenteId       = -1,
             Estrategia     = nombreApuesta,
             PrecioEntrada  = precioEntrada,
             PrecioEsperado = precioEsperado,

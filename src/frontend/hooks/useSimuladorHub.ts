@@ -3,7 +3,6 @@ import * as signalR from '@microsoft/signalr';
 import type {
   NuevoPrecioPayload,
   NuevaMetricaPayload,
-  ResultadoTickPayload,
   EstadoInicialPayload,
   ApuestaEspeculativa,
   PrediccionesCalculadasPayload,
@@ -37,7 +36,6 @@ export function useSimuladorHub() {
   // Callbacks de alta frecuencia — via refs para evitar re-renders
   const onNuevoPrecioRef   = useRef<((data: NuevoPrecioPayload) => void) | null>(null);
   const onNuevaMetricaRef  = useRef<((data: NuevaMetricaPayload) => void) | null>(null);
-  const onResultadoTickRef = useRef<((data: ResultadoTickPayload) => void) | null>(null);
 
   // ── Conexión SignalR ───────────────────────────────────────────────────────
   useEffect(() => {
@@ -56,10 +54,6 @@ export function useSimuladorHub() {
 
     hub.on('NuevaMetrica', (data: NuevaMetricaPayload) => {
       onNuevaMetricaRef.current?.(data);
-    });
-
-    hub.on('ResultadoTick', (data: ResultadoTickPayload) => {
-      onResultadoTickRef.current?.(data);
     });
 
     hub.on('ModoFuenteChanged', (modo: 'Swissquote' | 'API' | 'CSV') => {
@@ -167,7 +161,6 @@ export function useSimuladorHub() {
     configurar,
     onNuevoPrecioRef,
     onNuevaMetricaRef,
-    onResultadoTickRef,
     isCalculando,
     modoEspeculacion,
     tiempoMsEspeculacion,

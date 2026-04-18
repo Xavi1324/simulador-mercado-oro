@@ -10,6 +10,8 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:500
 
 const GraficaVelas = dynamic(() => import('@/components/GraficaVelas'), { ssr: false });
 
+const LOG_PLACEHOLDER_TIMESTAMP = 'placeholder';
+
 function ConsolaSistema({ logs }: { logs: ConsoleLogPayload[] }) {
   const levelClass: Record<ConsoleLogPayload['level'], string> = {
     info: 'text-slate-300',
@@ -30,7 +32,7 @@ function ConsolaSistema({ logs }: { logs: ConsoleLogPayload[] }) {
   const lineas = logs.length > 0
     ? logs
     : [{
-        timestamp: new Date().toISOString(),
+        timestamp: LOG_PLACEHOLDER_TIMESTAMP,
         level: 'info' as const,
         fase: 'sistema',
         mensaje: 'Consola lista. Inicie la simulación para ver la ejecución.',
@@ -46,7 +48,9 @@ function ConsolaSistema({ logs }: { logs: ConsoleLogPayload[] }) {
         <div className="space-y-1">
           {lineas.map((log, i) => (
             <p key={`${log.timestamp}-${i}`} className={levelClass[log.level]}>
-              <span className="text-slate-600">[{formatearHora(log.timestamp)}]</span>{' '}
+              <span className="text-slate-600">
+                [{log.timestamp === LOG_PLACEHOLDER_TIMESTAMP ? '--:--:--' : formatearHora(log.timestamp)}]
+              </span>{' '}
               <span className="text-blue-300">{log.fase}</span>{' '}
               {log.threadId != null && <span className="text-slate-500">thread:{log.threadId} </span>}
               {log.nucleos != null && <span className="text-slate-500">cpu:{log.nucleos} </span>}
