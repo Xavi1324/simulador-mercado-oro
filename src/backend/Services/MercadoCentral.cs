@@ -62,15 +62,16 @@ public sealed class MercadoCentral : BackgroundService
 
     // ── Control público ───────────────────────────────────────────────────────
 
-    public void Iniciar(int nucleos, int intervaloSegundos, ModoEjecucion modo = ModoEjecucion.Paralelo)
+    public void Iniciar(int nucleos, int intervaloSegundos)
     {
         _nucleos           = Math.Max(1, nucleos);
         _intervaloSegundos = Math.Max(1, intervaloSegundos);
-        _modoEspeculacion  = modo;
+        _modoEspeculacion  = ResolverModo(_nucleos);
+        _portafolioService.Reiniciar();
         lock (_agentesLock)
             _agentes = Enumerable.Range(0, _nucleos).Select(i => new Agente(i)).ToList();
         _activo = true;
-        _logger.LogInformation("Simulación iniciada: {N} núcleos, {I}s, modo={M}", _nucleos, _intervaloSegundos, modo);
+        _logger.LogInformation("Simulación iniciada: {N} núcleos, {I}s, modo={M}", _nucleos, _intervaloSegundos, _modoEspeculacion);
     }
 
     public void Pausar()
@@ -84,11 +85,17 @@ public sealed class MercadoCentral : BackgroundService
     {
         _nucleos           = Math.Max(1, nucleos);
         _intervaloSegundos = Math.Max(1, intervaloSegundos);
+        _modoEspeculacion  = ResolverModo(_nucleos);
         lock (_agentesLock)
             _agentes = Enumerable.Range(0, _nucleos).Select(i => new Agente(i)).ToList();
     }
 
     public bool EstaActivo => _activo;
+
+    public ModoEjecucion ModoEspeculacion => _modoEspeculacion;
+
+    private static ModoEjecucion ResolverModo(int nucleos) =>
+        nucleos <= 1 ? ModoEjecucion.Secuencial : ModoEjecucion.Paralelo;
 
     // ── ExecuteAsync: dos bucles concurrentes ─────────────────────────────────
 
@@ -169,6 +176,17 @@ public sealed class MercadoCentral : BackgroundService
             nucleos            = resultado.Metrica.Nucleos,
         }, ct);
 
+        await EmitirConsoleLog("info", "metricas",
+            $"Tick #{tick.NumeroTick}: secuencial {resultado.Metrica.TiempoSecuencialMs} ms | paralelo {resultado.Metrica.TiempoParaleloMs} ms | speedup {resultado.Metrica.Speedup:F2}x | eficiencia {resultado.Metrica.Eficiencia * 100:F2}%",
+            ct,
+            tick: tick.NumeroTick,
+            nucleos: _nucleos,
+            modo: _modoEspeculacion,
+            speedup: resultado.Metrica.Speedup,
+            eficiencia: resultado.Metrica.Eficiencia,
+            tiempoSecuencialMs: resultado.Metrica.TiempoSecuencialMs,
+            tiempoParaleloMs: resultado.Metrica.TiempoParaleloMs);
+
         _apuestasPrevias = resultado.ApuestasActuales;
     }
 
@@ -207,6 +225,12 @@ public sealed class MercadoCentral : BackgroundService
 
         _logger.LogInformation("Ciclo especulativo iniciado — precio={P} modo={M}", precioAlApostar, modo);
 
+        await EmitirConsoleLog("info", "especulacion",
+            $"Cálculo especulativo iniciado: modo {modo}, núcleos {_nucleos}, thread {Environment.CurrentManagedThreadId}",
+            ct,
+            nucleos: _nucleos,
+            modo: modo);
+
         // 1. Avisar que inició el cálculo
         await _hub.Clients.All.SendAsync("CalculoIniciado",
             new { modo = modo.ToString(), timestamp = DateTime.UtcNow }, ct);
@@ -228,6 +252,14 @@ public sealed class MercadoCentral : BackgroundService
             tick        = resultado.TickNumero,
         }, ct);
 
+        await EmitirConsoleLog("info", "benchmark",
+            $"Estrategias calculadas en {resultado.TiempoEjecucionMs} ms usando modo {resultado.Modo}",
+            ct,
+            tick: resultado.TickNumero,
+            nucleos: _nucleos,
+            modo: resultado.Modo,
+            tiempoParaleloMs: resultado.TiempoEjecucionMs);
+
         // 4. Emitir la estrategia elegida (las otras 2 se desvanecen en el frontend)
         await _hub.Clients.All.SendAsync("EstrategiaSeleccionada", new
         {
@@ -236,8 +268,19 @@ public sealed class MercadoCentral : BackgroundService
             tick         = resultado.TickNumero,
         }, ct);
 
+        await EmitirConsoleLog("info", "apuesta",
+            $"Estrategia seleccionada: {resultado.EstrategiaSeleccionada.Nombre} ({resultado.EstrategiaSeleccionada.Direccion}) a {FormatoPrecio(resultado.EstrategiaSeleccionada)}",
+            ct,
+            tick: resultado.TickNumero,
+            nucleos: _nucleos,
+            modo: resultado.Modo);
+
         // 5. Esperar 60 segundos (cierre de vela especulativa)
         _logger.LogInformation("Esperando 60s para validar la apuesta...");
+        await EmitirConsoleLog("info", "evaluacion", "Esperando 60s para validar la apuesta con precio real.", ct,
+            tick: resultado.TickNumero,
+            nucleos: _nucleos,
+            modo: resultado.Modo);
         await Task.Delay(60_000, ct);
 
         // 6. Validar con el precio real actual
@@ -247,9 +290,7 @@ public sealed class MercadoCentral : BackgroundService
         var apuesta   = resultado.EstrategiaSeleccionada;
         const decimal monto = 100m;
 
-        bool gano = apuesta.EsRango
-            ? precioFinal >= apuesta.PrecioMin!.Value && precioFinal <= apuesta.PrecioMax!.Value
-            : Math.Abs(precioFinal - apuesta.PrecioEsperado) <= MargenAceptable;
+        bool gano = EvaluarApuestaEspeculativa(apuesta, precioFinal);
 
         _portafolioService.RegistrarResultado(
             apuesta.Nombre, gano, monto,
@@ -260,6 +301,13 @@ public sealed class MercadoCentral : BackgroundService
             "Apuesta {N}: {R} (precio inicial={Pi} final={Pf})",
             apuesta.Nombre, gano ? "GANADA" : "PERDIDA", precioAlApostar, precioFinal);
 
+        await EmitirConsoleLog(gano ? "success" : "warning", "resultado",
+            $"Apuesta {apuesta.Nombre}: $100 | {DescribirCondicion(apuesta, precioFinal)} | {(gano ? "GANADA" : "PERDIDA")} | entrada ${precioAlApostar:N2} | saldo ${_portafolioService.Balance:N2}",
+            ct,
+            tick: resultado.TickNumero,
+            nucleos: _nucleos,
+            modo: resultado.Modo);
+
         await _hub.Clients.All.SendAsync("PortafolioActualizado", new
         {
             balance      = _portafolioService.Balance,
@@ -267,7 +315,7 @@ public sealed class MercadoCentral : BackgroundService
         }, ct);
     }
 
-    private static object MapDto(ApuestaDemo a) => new
+    private static object MapDto(ApuestaEspeculativa a) => new
     {
         nombre           = a.Nombre,
         precioEsperado   = a.PrecioEsperado,
@@ -278,6 +326,74 @@ public sealed class MercadoCentral : BackgroundService
             ? $"{(int)a.TiempoExpiracion.TotalMinutes}m"
             : $"{(int)a.TiempoExpiracion.TotalSeconds}s",
     };
+
+    public Task EmitirEstadoConsolaInicial(ISingleClientProxy cliente, CancellationToken ct = default) =>
+        cliente.SendAsync("ConsoleLog", new
+        {
+            timestamp = DateTime.UtcNow,
+            level = "info",
+            fase = "sistema",
+            mensaje = $"Procesadores disponibles: {Environment.ProcessorCount}. Saldo real: ${_portafolio.Saldo:N2}",
+            nucleos = _nucleos,
+            modo = _modoEspeculacion.ToString(),
+            threadId = Environment.CurrentManagedThreadId,
+        }, ct);
+
+    public Task EmitirConsoleLog(string level, string fase, string mensaje, CancellationToken ct = default,
+        int? tick = null,
+        int? nucleos = null,
+        ModoEjecucion? modo = null,
+        int? agente = null,
+        double? speedup = null,
+        double? eficiencia = null,
+        double? tiempoSecuencialMs = null,
+        double? tiempoParaleloMs = null)
+    {
+        return _hub.Clients.All.SendAsync("ConsoleLog", new
+        {
+            timestamp = DateTime.UtcNow,
+            level,
+            fase,
+            mensaje,
+            tick,
+            nucleos,
+            modo = modo?.ToString(),
+            threadId = Environment.CurrentManagedThreadId,
+            agente,
+            speedup,
+            eficiencia,
+            tiempoSecuencialMs,
+            tiempoParaleloMs,
+        }, ct);
+    }
+
+    private static string FormatoPrecio(ApuestaEspeculativa apuesta) =>
+        apuesta.EsRango
+            ? $"${apuesta.PrecioMin:N2} - ${apuesta.PrecioMax:N2}"
+            : $"${apuesta.PrecioEsperado:N2}";
+
+    public static bool EvaluarApuestaEspeculativa(ApuestaEspeculativa apuesta, decimal precioFinal) =>
+        apuesta.Direccion switch
+        {
+            DireccionApuesta.Alcista => precioFinal >= apuesta.PrecioEsperado,
+            DireccionApuesta.Bajista => precioFinal <= apuesta.PrecioEsperado,
+            DireccionApuesta.Neutro when apuesta.EsRango =>
+                precioFinal >= apuesta.PrecioMin!.Value && precioFinal <= apuesta.PrecioMax!.Value,
+            _ => Math.Abs(precioFinal - apuesta.PrecioEsperado) <= MargenAceptable,
+        };
+
+    private static string DescribirCondicion(ApuestaEspeculativa apuesta, decimal precioFinal) =>
+        apuesta.Direccion switch
+        {
+            DireccionApuesta.Alcista =>
+                $"barrera alcista ${apuesta.PrecioEsperado:N2}, final ${precioFinal:N2}",
+            DireccionApuesta.Bajista =>
+                $"barrera bajista ${apuesta.PrecioEsperado:N2}, final ${precioFinal:N2}",
+            DireccionApuesta.Neutro when apuesta.EsRango =>
+                $"rango ${apuesta.PrecioMin:N2} - ${apuesta.PrecioMax:N2}, final ${precioFinal:N2}",
+            _ =>
+                $"objetivo ${apuesta.PrecioEsperado:N2}, final ${precioFinal:N2}",
+        };
 
     // ── Evaluación de apuestas del loop de agentes ────────────────────────────
 
@@ -291,9 +407,6 @@ public sealed class MercadoCentral : BackgroundService
 
             apuesta.GananciaReal = esGanadora ? ganancia : -ganancia;
             apuesta.EsGanadora   = esGanadora;
-
-            if (esGanadora) _portafolio.Sumar(ganancia, apuesta);
-            else            _portafolio.Restar(ganancia, apuesta);
 
             await _hub.Clients.All.SendAsync("ResultadoTick", new
             {

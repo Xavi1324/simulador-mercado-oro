@@ -1,43 +1,46 @@
-using Microsoft.Extensions.Options;
 using SimuladorBackend.Models;
-using SimuladorBackend.Options;
 
 namespace SimuladorBackend.Services;
 
 /// <summary>
-/// Servicio de portafolio para la demo de descomposición especulativa.
-/// Mantiene un balance separado del portafolio del loop de fondo,
-/// protegido con lock para escrituras concurrentes.
+/// Registra los resultados especulativos en el portafolio real compartido.
 /// </summary>
 public sealed class PortafolioService
 {
-    private readonly object       _lock           = new();
-    private readonly decimal      _balanceInicial;
-    private          decimal      _balance;
-    private readonly List<string> _historial      = [];
+    private readonly object       _lock      = new();
+    private readonly Portafolio   _portafolio;
+    private readonly List<string> _historial = [];
 
-    public PortafolioService(IOptions<SimuladorOptions> options)
+    public PortafolioService(Portafolio portafolio)
     {
-        _balanceInicial = options.Value.BalanceInicialDemo;
-        _balance        = _balanceInicial;
+        _portafolio = portafolio;
     }
 
-    public decimal Balance
-    {
-        get { lock (_lock) return _balance; }
-    }
+    public decimal Balance => _portafolio.Saldo;
 
     /// <summary>
-    /// Registra el resultado de una apuesta y actualiza el balance.
-    /// El lock garantiza que escrituras concurrentes no corrompan el saldo.
+    /// Registra el resultado de una apuesta y actualiza el saldo real.
     /// </summary>
     public void RegistrarResultado(
         string nombreApuesta, bool gano, decimal monto,
         decimal precioEntrada, decimal precioEsperado)
     {
+        var apuesta = new Apuesta
+        {
+            AgenteId       = -1,
+            Estrategia     = nombreApuesta,
+            PrecioEntrada  = precioEntrada,
+            PrecioEsperado = precioEsperado,
+            Volumen        = (int)monto,
+            GananciaReal   = gano ? monto : -monto,
+            EsGanadora     = gano,
+        };
+
+        if (gano) _portafolio.Sumar(monto, apuesta);
+        else      _portafolio.Restar(monto, apuesta);
+
         lock (_lock)
         {
-            _balance += gano ? monto : -monto;
             string emoji = gano ? "✅" : "❌";
             _historial.Add(
                 $"[{DateTime.UtcNow:HH:mm:ss}] {nombreApuesta}: " +
@@ -54,7 +57,7 @@ public sealed class PortafolioService
     {
         lock (_lock)
         {
-            _balance = _balanceInicial;
+            _portafolio.Reiniciar();
             _historial.Clear();
         }
     }

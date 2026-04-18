@@ -15,6 +15,10 @@ public class Portafolio
 
     public decimal Saldo { get; private set; }
 
+    public Portafolio() : this(Microsoft.Extensions.Options.Options.Create(new SimuladorOptions()))
+    {
+    }
+
     public Portafolio(IOptions<SimuladorOptions> options)
     {
         _saldoInicial = options.Value.SaldoInicialPortafolio;

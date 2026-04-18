@@ -35,7 +35,8 @@ export interface EstadoInicialPayload {
   nucleosDisponibles: number;
   ultimasMetricas: MetricaCiclo[];
   saldoInicialPortafolio: number;
-  balanceInicialDemo: number;
+  saldoPortafolio: number;
+  modoEspeculacion: 'Secuencial' | 'Paralelo';
 }
 
 // Fila de métricas históricas
@@ -62,10 +63,10 @@ export interface VelaDatos {
   close: number;
 }
 
-// ── Demo: Descomposición Especulativa ─────────────────────────────────────────
+// ── Descomposición Especulativa ───────────────────────────────────────────────
 
 // Una estrategia calculada por el backend
-export interface ApuestaDemo {
+export interface ApuestaEspeculativa {
   nombre: string;
   precioEsperado: number;
   precioMin?: number;   // solo Conservadora — extremo bajo del rango
@@ -76,16 +77,16 @@ export interface ApuestaDemo {
 
 // Evento "PrediccionesCalculadas" — llega cuando las 3 estrategias terminaron
 export interface PrediccionesCalculadasPayload {
-  estrategias: ApuestaDemo[];
+  estrategias: ApuestaEspeculativa[];
   tiempoMs: number;
-  modo: string;
+  modo: 'Secuencial' | 'Paralelo';
   tick: number;
 }
 
 // Evento "EstrategiaSeleccionada" — la ganadora + las 2 descartadas
 export interface EstrategiaSeleccionadaPayload {
-  seleccionada: ApuestaDemo;
-  descartadas: ApuestaDemo[];
+  seleccionada: ApuestaEspeculativa;
+  descartadas: ApuestaEspeculativa[];
   tick: number;
 }
 
@@ -95,3 +96,19 @@ export interface PortafolioActualizadoPayload {
   ultimoEvento: string | null;
 }
 
+// Evento ConsoleLog (servidor → cliente)
+export interface ConsoleLogPayload {
+  timestamp: string;
+  level: 'info' | 'success' | 'warning' | 'error';
+  fase: string;
+  mensaje: string;
+  tick?: number;
+  nucleos?: number;
+  modo?: 'Secuencial' | 'Paralelo';
+  threadId?: number;
+  agente?: number;
+  speedup?: number;
+  eficiencia?: number;
+  tiempoSecuencialMs?: number;
+  tiempoParaleloMs?: number;
+}

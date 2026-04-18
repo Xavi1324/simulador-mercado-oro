@@ -40,19 +40,30 @@ public class MetricasEngine
 
         // 1. Baseline secuencial — no usar CancellationToken, es síncrono
         var swSeq = Stopwatch.StartNew();
-        foreach (var agente in agentes)
-            agente.ProcesarTickSecuencial(tick, historial);
+        var apuestasSecuenciales = agentes
+            .Select(agente => agente.ProcesarTickSecuencial(tick, historial))
+            .ToArray();
         swSeq.Stop();
 
-        // 2. Modo paralelo real — MIMD
-        var swPar = Stopwatch.StartNew();
-        var apuestasActuales = await Task.WhenAll(
-            agentes.Select(a => a.ProcesarTick(tick, historial, ct))
-        );
-        swPar.Stop();
-
+        Apuesta[] apuestasActuales;
         long tSeq = Math.Max(swSeq.ElapsedMilliseconds, 1);
-        long tPar = Math.Max(swPar.ElapsedMilliseconds, 1);
+        long tPar;
+
+        if (nucleos <= 1)
+        {
+            apuestasActuales = apuestasSecuenciales;
+            tPar = tSeq;
+        }
+        else
+        {
+            // 2. Modo paralelo real — MIMD
+            var swPar = Stopwatch.StartNew();
+            apuestasActuales = await Task.WhenAll(
+                agentes.Select(a => a.ProcesarTick(tick, historial, ct))
+            );
+            swPar.Stop();
+            tPar = Math.Max(swPar.ElapsedMilliseconds, 1);
+        }
 
         double speedup    = (double)tSeq / tPar;
         double eficiencia = nucleos > 0 ? speedup / nucleos : speedup;

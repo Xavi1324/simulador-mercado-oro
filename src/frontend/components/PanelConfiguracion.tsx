@@ -7,10 +7,10 @@ interface PanelConfiguracionProps {
   nucleosDisponibles: number;
   simulacionActiva: boolean;
   isCalculando: boolean;
-  balanceDemo: number;
-  balanceInicialDemo: number;
+  saldoPortafolio: number;
+  saldoInicialPortafolio: number;
   modoFuente: 'Swissquote' | 'API' | 'CSV' | null;
-  onIniciar: (nucleos: number, intervalo: number, modo: 'Secuencial' | 'Paralelo') => void;
+  onIniciar: (nucleos: number, intervalo: number) => void;
   onPausar: () => void;
   onConfigurar: (nucleos: number, intervalo: number) => void;
   onCambiarFuente: (fuente: 'Swissquote' | 'CSV') => void;
@@ -21,8 +21,8 @@ export default function PanelConfiguracion({
   nucleosDisponibles,
   simulacionActiva,
   isCalculando,
-  balanceDemo,
-  balanceInicialDemo,
+  saldoPortafolio,
+  saldoInicialPortafolio,
   modoFuente,
   onIniciar,
   onPausar,
@@ -31,7 +31,6 @@ export default function PanelConfiguracion({
 }: PanelConfiguracionProps) {
   const [nucleos, setNucleos]     = useState(1);
   const [intervalo, setIntervalo] = useState(2);
-  const [modoDemo, setModoDemo]   = useState<'Secuencial' | 'Paralelo'>('Paralelo');
 
   useEffect(() => {
     if (simulacionActiva) {
@@ -119,7 +118,7 @@ export default function PanelConfiguracion({
       <div className="flex flex-col gap-2 pt-1">
         {!simulacionActiva ? (
           <button
-            onClick={() => onIniciar(nucleos, intervalo, modoDemo)}
+            onClick={() => onIniciar(nucleos, intervalo)}
             disabled={!conectado}
             className="bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-medium transition-colors"
           >
@@ -136,51 +135,30 @@ export default function PanelConfiguracion({
         )}
       </div>
 
-      {/* ── Demo: Descomposición Especulativa ─────────────────────────────── */}
+      {/* ── Portafolio real ───────────────────────────────────────────────── */}
       <div className="border-t border-slate-700 pt-3 space-y-2">
         <p className="text-slate-400 text-xs uppercase tracking-wider font-semibold">
-          Demo Especulativa
+          Portafolio real
         </p>
 
-        {/* Selector Secuencial / Paralelo */}
-        <div className="flex gap-2">
-          {(['Secuencial', 'Paralelo'] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => setModoDemo(m)}
-              className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-colors ${
-                modoDemo === m
-                  ? m === 'Paralelo'
-                    ? 'bg-green-700 text-green-100'
-                    : 'bg-yellow-700 text-yellow-100'
-                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-              }`}
-            >
-              {m === 'Paralelo' ? '⚡ Paralelo' : '⏱ Secuencial'}
-            </button>
-          ))}
-        </div>
-
-        {/* Hint de tiempo + estado del ciclo */}
         <p className="text-slate-500 text-xs text-center">
           {isCalculando
-            ? modoDemo === 'Paralelo'
-              ? 'Calculando 3 estrategias en paralelo...'
-              : 'Calculando 3 estrategias en secuencial...'
-            : modoDemo === 'Paralelo'
-            ? 'Task.WhenAll → ~10 s · ciclo auto cada ~70 s'
-            : 'await A → B → C → ~30 s · ciclo auto cada ~90 s'}
+            ? nucleos > 1
+              ? 'Calculando estrategias repartidas entre CPU...'
+              : 'Calculando estrategias en secuencial...'
+            : nucleos > 1
+            ? 'Más de 1 CPU → trabajo paralelo'
+            : '1 CPU → trabajo secuencial'}
         </p>
 
-        {/* Balance demo */}
         <div className="flex items-center justify-between bg-slate-900 rounded-lg px-3 py-2">
-          <span className="text-slate-400 text-xs">Portafolio demo</span>
+          <span className="text-slate-400 text-xs">Saldo actual</span>
           <span
             className={`text-sm font-bold font-mono ${
-              balanceDemo >= balanceInicialDemo ? 'text-green-400' : 'text-red-400'
+              saldoPortafolio >= saldoInicialPortafolio ? 'text-green-400' : 'text-red-400'
             }`}
           >
-            ${balanceDemo.toFixed(2)}
+            ${saldoPortafolio.toFixed(2)}
           </span>
         </div>
       </div>

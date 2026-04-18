@@ -21,7 +21,7 @@ builder.Services.AddSingleton<MetricasEngine>();
 builder.Services.AddSingleton<MercadoCentral>();
 builder.Services.AddHostedService(p => p.GetRequiredService<MercadoCentral>());
 
-// ── Demo: Descomposición Especulativa ─────────────────────────────────────────
+// ── Descomposición especulativa ───────────────────────────────────────────────
 builder.Services.AddSingleton<EstrategiaService>();
 builder.Services.AddSingleton<SimuladorService>();
 builder.Services.AddSingleton<PortafolioService>();

@@ -5,10 +5,11 @@ import type {
   NuevaMetricaPayload,
   ResultadoTickPayload,
   EstadoInicialPayload,
-  ApuestaDemo,
+  ApuestaEspeculativa,
   PrediccionesCalculadasPayload,
   EstrategiaSeleccionadaPayload,
   PortafolioActualizadoPayload,
+  ConsoleLogPayload,
 } from '@/types/simulador';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000';
@@ -22,14 +23,14 @@ export function useSimuladorHub() {
   const [estadoInicial, setEstadoInicial] = useState<EstadoInicialPayload | null>(null);
   const [precioActual, setPrecioActual]   = useState<number>(0);
 
-  // ── Estado: demo de descomposición especulativa ───────────────────────────
+  // ── Estado: descomposición especulativa ───────────────────────────────────
   const [isCalculando, setIsCalculando]   = useState(false);
-  const [modoDemo, setModoDemo]           = useState<'Secuencial' | 'Paralelo'>('Paralelo');
-  const [tiempoMsDemo, setTiempoMsDemo]   = useState<number | null>(null);
-  const [predicciones, setPredicciones]   = useState<ApuestaDemo[] | null>(null);
-  const [estrategiaSeleccionada, setEstrategiaSeleccionada] = useState<ApuestaDemo | null>(null);
-  const [balanceDemo, setBalanceDemo]     = useState(0);
-  const [logsDemo, setLogsDemo]           = useState<string[]>([]);
+  const [modoEspeculacion, setModoEspeculacion] = useState<'Secuencial' | 'Paralelo'>('Paralelo');
+  const [tiempoMsEspeculacion, setTiempoMsEspeculacion] = useState<number | null>(null);
+  const [predicciones, setPredicciones]   = useState<ApuestaEspeculativa[] | null>(null);
+  const [estrategiaSeleccionada, setEstrategiaSeleccionada] = useState<ApuestaEspeculativa | null>(null);
+  const [saldoPortafolio, setSaldoPortafolio] = useState(0);
+  const [consoleLogs, setConsoleLogs] = useState<ConsoleLogPayload[]>([]);
   const [segsRestantes, setSegsRestantes] = useState<number | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -65,24 +66,30 @@ export function useSimuladorHub() {
       setModoFuente(modo);
     });
 
-    hub.on('EstadoInicial', (data: EstadoInicialPayload) => {
-      setEstadoInicial(data);
-      setBalanceDemo(data.balanceInicialDemo);
+    hub.on('ConsoleLog', (data: ConsoleLogPayload) => {
+      setConsoleLogs(prev => [...prev.slice(-199), data]);
     });
 
-    // ── Demo: Descomposición Especulativa ────────────────────────────────────
+    hub.on('EstadoInicial', (data: EstadoInicialPayload) => {
+      setEstadoInicial(data);
+      setSaldoPortafolio(data.saldoPortafolio);
+      setModoEspeculacion(data.modoEspeculacion);
+    });
+
+    // ── Descomposición Especulativa ──────────────────────────────────────────
     hub.on('CalculoIniciado', (data: { modo: string; timestamp: string }) => {
       const modo = data.modo === 'Secuencial' ? 'Secuencial' : 'Paralelo';
       setIsCalculando(true);
       setPredicciones(null);
       setEstrategiaSeleccionada(null);
-      setModoDemo(modo);
+      setModoEspeculacion(modo);
     });
 
     hub.on('PrediccionesCalculadas', (data: PrediccionesCalculadasPayload) => {
       setIsCalculando(false);
-      setTiempoMsDemo(data.tiempoMs);
+      setTiempoMsEspeculacion(data.tiempoMs);
       setPredicciones(data.estrategias);
+      setModoEspeculacion(data.modo);
     });
 
     hub.on('EstrategiaSeleccionada', (data: EstrategiaSeleccionadaPayload) => {
@@ -103,10 +110,7 @@ export function useSimuladorHub() {
     });
 
     hub.on('PortafolioActualizado', (data: PortafolioActualizadoPayload) => {
-      setBalanceDemo(data.balance);
-      if (data.ultimoEvento) {
-        setLogsDemo(prev => [...prev.slice(-49), data.ultimoEvento!]);
-      }
+      setSaldoPortafolio(data.balance);
       if (countdownRef.current) {
         clearInterval(countdownRef.current);
         countdownRef.current = null;
@@ -133,9 +137,9 @@ export function useSimuladorHub() {
   }, []);
 
   // ── Acciones ──────────────────────────────────────────────────────────────
-  const iniciar = useCallback((nucleos: number, intervaloSegundos: number, modo: 'Secuencial' | 'Paralelo') => {
+  const iniciar = useCallback((nucleos: number, intervaloSegundos: number) => {
     if (!hubRef.current || !conectado) return;
-    hubRef.current.invoke('IniciarSimulacion', nucleos, intervaloSegundos, modo);
+    hubRef.current.invoke('IniciarSimulacion', nucleos, intervaloSegundos);
   }, [conectado]);
 
   const pausar = useCallback(() => {
@@ -165,12 +169,12 @@ export function useSimuladorHub() {
     onNuevaMetricaRef,
     onResultadoTickRef,
     isCalculando,
-    modoDemo,
-    tiempoMsDemo,
+    modoEspeculacion,
+    tiempoMsEspeculacion,
     predicciones,
     estrategiaSeleccionada,
-    balanceDemo,
-    logsDemo,
+    saldoPortafolio,
+    consoleLogs,
     cambiarFuente,
     segsRestantes,
   };

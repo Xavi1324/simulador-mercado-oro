@@ -25,7 +25,7 @@ public sealed class EstrategiaService
 
     // ── Métodos públicos ──────────────────────────────────────────────────────
 
-    public Task<ApuestaDemo> CalcularAgresiva(
+    public Task<ApuestaEspeculativa> CalcularAgresiva(
         decimal precioActual,
         IReadOnlyList<decimal> historial,
         CancellationToken ct)
@@ -40,7 +40,7 @@ public sealed class EstrategiaService
             double delta = Math.Abs(estimado - p0);
             if (delta < 0.50) delta = 0.50; // mínimo $0.50 de movimiento al alza
             decimal esperado = Math.Round((decimal)(p0 + delta), 2);
-            return new ApuestaDemo
+            return new ApuestaEspeculativa
             {
                 Nombre           = "Agresiva",
                 PrecioEsperado   = esperado,
@@ -51,7 +51,7 @@ public sealed class EstrategiaService
         }, ct);
     }
 
-    public Task<ApuestaDemo> CalcularConservadora(
+    public Task<ApuestaEspeculativa> CalcularConservadora(
         decimal precioActual,
         IReadOnlyList<decimal> historial,
         CancellationToken ct)
@@ -68,7 +68,7 @@ public sealed class EstrategiaService
             decimal centro   = Math.Round((decimal)(p0 + delta), 2);
             decimal minRango = Math.Round((decimal)(p0 - maxDelta), 2);
             decimal maxRango = Math.Round((decimal)(p0 + maxDelta), 2);
-            return new ApuestaDemo
+            return new ApuestaEspeculativa
             {
                 Nombre           = "Conservadora",
                 PrecioEsperado   = centro,
@@ -81,7 +81,7 @@ public sealed class EstrategiaService
         }, ct);
     }
 
-    public Task<ApuestaDemo> CalcularTendencia(
+    public Task<ApuestaEspeculativa> CalcularTendencia(
         decimal precioActual,
         IReadOnlyList<decimal> historial,
         CancellationToken ct)
@@ -96,7 +96,7 @@ public sealed class EstrategiaService
             double delta = Math.Abs(estimado - p0);
             if (delta < 0.50) delta = 0.50; // mínimo $0.50 de movimiento a la baja
             decimal esperado = Math.Round((decimal)(p0 - delta), 2);
-            return new ApuestaDemo
+            return new ApuestaEspeculativa
             {
                 Nombre           = "Tendencia",
                 PrecioEsperado   = esperado,
@@ -241,7 +241,7 @@ public sealed class EstrategiaService
 
 // ── Modelos compartidos ───────────────────────────────────────────────────────
 
-public sealed class ApuestaDemo
+public sealed class ApuestaEspeculativa
 {
     public string           Nombre           { get; init; } = string.Empty;
     public decimal          PrecioEsperado   { get; init; }  // punto central (Agresiva / Tendencia)

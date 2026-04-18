@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
-import type { MetricaCiclo } from '@/types/simulador';
+import type { ConsoleLogPayload, MetricaCiclo } from '@/types/simulador';
 import { useSimuladorHub } from '@/hooks/useSimuladorHub';
 import PanelConfiguracion from '@/components/PanelConfiguracion';
 import PanelMetricas      from '@/components/PanelMetricas';
@@ -9,6 +9,56 @@ import OverlayCalculando  from '@/components/overlays/OverlayCalculando';
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000';
 
 const GraficaVelas = dynamic(() => import('@/components/GraficaVelas'), { ssr: false });
+
+function ConsolaSistema({ logs }: { logs: ConsoleLogPayload[] }) {
+  const levelClass: Record<ConsoleLogPayload['level'], string> = {
+    info: 'text-slate-300',
+    success: 'text-green-400',
+    warning: 'text-yellow-400',
+    error: 'text-red-400',
+  };
+
+  const formatearHora = (timestamp: string) =>
+    new Intl.DateTimeFormat('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+      timeZone: 'America/New_York',
+    }).format(new Date(timestamp));
+
+  const lineas = logs.length > 0
+    ? logs
+    : [{
+        timestamp: new Date().toISOString(),
+        level: 'info' as const,
+        fase: 'sistema',
+        mensaje: 'Consola lista. Inicie la simulación para ver la ejecución.',
+      }];
+
+  return (
+    <div className="bg-slate-950 border border-slate-700 rounded-xl overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-slate-800 bg-slate-900">
+        <p className="text-slate-300 text-xs uppercase tracking-wider font-semibold">Consola de ejecución</p>
+        <span className="text-slate-600 text-xs font-mono">{logs.length} eventos</span>
+      </div>
+      <div className="h-56 overflow-y-auto px-4 py-3 font-mono text-xs leading-relaxed flex flex-col-reverse">
+        <div className="space-y-1">
+          {lineas.map((log, i) => (
+            <p key={`${log.timestamp}-${i}`} className={levelClass[log.level]}>
+              <span className="text-slate-600">[{formatearHora(log.timestamp)}]</span>{' '}
+              <span className="text-blue-300">{log.fase}</span>{' '}
+              {log.threadId != null && <span className="text-slate-500">thread:{log.threadId} </span>}
+              {log.nucleos != null && <span className="text-slate-500">cpu:{log.nucleos} </span>}
+              {log.tick != null && <span className="text-slate-500">tick:{log.tick} </span>}
+              <span>{log.mensaje}</span>
+            </p>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Home() {
   const {
@@ -22,12 +72,12 @@ export default function Home() {
     onNuevoPrecioRef,
     onNuevaMetricaRef,
     isCalculando,
-    modoDemo,
-    tiempoMsDemo,
+    modoEspeculacion,
+    tiempoMsEspeculacion,
     predicciones,
     estrategiaSeleccionada,
-    balanceDemo,
-    logsDemo,
+    saldoPortafolio,
+    consoleLogs,
     segsRestantes,
   } = useSimuladorHub();
 
@@ -50,8 +100,8 @@ export default function Home() {
     }
   }, [estadoInicial]);
 
-  const handleIniciar = (nucleos: number, intervalo: number, modo: 'Secuencial' | 'Paralelo') => {
-    iniciar(nucleos, intervalo, modo);
+  const handleIniciar = (nucleos: number, intervalo: number) => {
+    iniciar(nucleos, intervalo);
     setSimulacionActiva(true);
   };
 
@@ -98,9 +148,9 @@ export default function Home() {
                  :                             'CSV'}
               </span>
             )}
-            {tiempoMsDemo !== null && (
+            {tiempoMsEspeculacion !== null && (
               <span className="text-xs font-mono bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full">
-                {modoDemo} · {(tiempoMsDemo / 1000).toFixed(1)} s
+                {modoEspeculacion} · {(tiempoMsEspeculacion / 1000).toFixed(1)} s
               </span>
             )}
             <div className="flex items-center gap-1.5">
@@ -120,7 +170,6 @@ export default function Home() {
         {/* Gráfica — ancho completo */}
         <GraficaVelas
           onNuevoPrecioRef={onNuevoPrecioRef}
-          modoFuente={modoFuente}
           predicciones={predicciones}
           estrategiaSeleccionada={estrategiaSeleccionada}
           segsRestantes={segsRestantes}
@@ -133,8 +182,8 @@ export default function Home() {
             nucleosDisponibles={nucleosDisponibles}
             simulacionActiva={simulacionActiva}
             isCalculando={isCalculando}
-            balanceDemo={balanceDemo}
-            balanceInicialDemo={estadoInicial?.balanceInicialDemo ?? 1_000}
+            saldoPortafolio={saldoPortafolio}
+            saldoInicialPortafolio={estadoInicial?.saldoInicialPortafolio ?? 1_000}
             modoFuente={modoFuente}
             onIniciar={handleIniciar}
             onPausar={handlePausar}
@@ -147,25 +196,7 @@ export default function Home() {
           />
         </div>
 
-        {/* Registro de apuestas */}
-        {logsDemo.length > 0 && (
-          <div className="bg-slate-800 rounded-xl p-4">
-            <p className="text-slate-500 text-xs uppercase tracking-wider font-semibold mb-2">
-              Registro de apuestas
-            </p>
-            <div className="space-y-0.5 max-h-36 overflow-y-auto font-mono text-xs">
-              {[...logsDemo].reverse().map((log, i) => (
-                <p key={i} className={
-                  log.includes('✅') ? 'text-green-400'
-                  : log.includes('❌') ? 'text-red-400'
-                  : 'text-slate-400'
-                }>
-                  {log}
-                </p>
-              ))}
-            </div>
-          </div>
-        )}
+        <ConsolaSistema logs={consoleLogs} />
       </div>
 
       {/* ── Footer ── */}
@@ -181,7 +212,7 @@ export default function Home() {
         </div>
       </footer>
 
-      <OverlayCalculando modo={modoDemo} visible={isCalculando} />
+      <OverlayCalculando modo={modoEspeculacion} visible={isCalculando} />
     </div>
   );
 }

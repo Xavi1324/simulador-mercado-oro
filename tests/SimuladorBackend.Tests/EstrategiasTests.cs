@@ -119,4 +119,119 @@ public class EstrategiasTests
         Assert.Contains(estrategias, e => e.Nombre == "Conservadora");
         Assert.Contains(estrategias, e => e.Nombre == "Tendencia");
     }
+
+    // ── Validación de apuesta especulativa ─────────────────────────────────
+
+    [Fact]
+    public void ApuestaAlcista_GanaCuandoSuperaBarrera()
+    {
+        var apuesta = new ApuestaEspeculativa
+        {
+            Nombre = "Agresiva",
+            PrecioEsperado = 4000m,
+            Direccion = DireccionApuesta.Alcista,
+        };
+
+        Assert.True(MercadoCentral.EvaluarApuestaEspeculativa(apuesta, 4500m));
+    }
+
+    [Fact]
+    public void ApuestaAlcista_GanaCuandoIgualaBarrera()
+    {
+        var apuesta = new ApuestaEspeculativa
+        {
+            Nombre = "Agresiva",
+            PrecioEsperado = 4000m,
+            Direccion = DireccionApuesta.Alcista,
+        };
+
+        Assert.True(MercadoCentral.EvaluarApuestaEspeculativa(apuesta, 4000m));
+    }
+
+    [Fact]
+    public void ApuestaAlcista_PierdeCuandoNoAlcanzaBarrera()
+    {
+        var apuesta = new ApuestaEspeculativa
+        {
+            Nombre = "Agresiva",
+            PrecioEsperado = 4000m,
+            Direccion = DireccionApuesta.Alcista,
+        };
+
+        Assert.False(MercadoCentral.EvaluarApuestaEspeculativa(apuesta, 3900m));
+    }
+
+    [Fact]
+    public void ApuestaBajista_GanaCuandoRompeBarreraHaciaAbajo()
+    {
+        var apuesta = new ApuestaEspeculativa
+        {
+            Nombre = "Tendencia",
+            PrecioEsperado = 2000m,
+            Direccion = DireccionApuesta.Bajista,
+        };
+
+        Assert.True(MercadoCentral.EvaluarApuestaEspeculativa(apuesta, 1800m));
+    }
+
+    [Fact]
+    public void ApuestaBajista_GanaCuandoIgualaBarrera()
+    {
+        var apuesta = new ApuestaEspeculativa
+        {
+            Nombre = "Tendencia",
+            PrecioEsperado = 2000m,
+            Direccion = DireccionApuesta.Bajista,
+        };
+
+        Assert.True(MercadoCentral.EvaluarApuestaEspeculativa(apuesta, 2000m));
+    }
+
+    [Fact]
+    public void ApuestaBajista_PierdeCuandoQuedaSobreBarrera()
+    {
+        var apuesta = new ApuestaEspeculativa
+        {
+            Nombre = "Tendencia",
+            PrecioEsperado = 2000m,
+            Direccion = DireccionApuesta.Bajista,
+        };
+
+        Assert.False(MercadoCentral.EvaluarApuestaEspeculativa(apuesta, 2100m));
+    }
+
+    [Theory]
+    [InlineData(2950)]
+    [InlineData(3000)]
+    [InlineData(3050)]
+    public void ApuestaConservadora_GanaDentroDelRangoIncluyendoBordes(decimal precioFinal)
+    {
+        var apuesta = new ApuestaEspeculativa
+        {
+            Nombre = "Conservadora",
+            PrecioEsperado = 3000m,
+            PrecioMin = 2950m,
+            PrecioMax = 3050m,
+            Direccion = DireccionApuesta.Neutro,
+        };
+
+        Assert.True(MercadoCentral.EvaluarApuestaEspeculativa(apuesta, precioFinal));
+    }
+
+    [Theory]
+    [InlineData(2949.99)]
+    [InlineData(3050.01)]
+    public void ApuestaConservadora_PierdeFueraDelRango(decimal precioFinal)
+    {
+        var apuesta = new ApuestaEspeculativa
+        {
+            Nombre = "Conservadora",
+            PrecioEsperado = 3000m,
+            PrecioMin = 2950m,
+            PrecioMax = 3050m,
+            Direccion = DireccionApuesta.Neutro,
+        };
+
+        Assert.False(MercadoCentral.EvaluarApuestaEspeculativa(apuesta, precioFinal));
+    }
 }

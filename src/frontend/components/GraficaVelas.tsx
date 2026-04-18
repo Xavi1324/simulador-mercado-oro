@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
-import type { NuevoPrecioPayload, ApuestaDemo } from '@/types/simulador';
-import type { UTCTimestamp } from 'lightweight-charts';
+import type { NuevoPrecioPayload, ApuestaEspeculativa } from '@/types/simulador';
+import type { IChartApi, IPriceLine, ISeriesApi, UTCTimestamp } from 'lightweight-charts';
 
 const COLORES_ESTRATEGIA: Record<string, string> = {
   Agresiva:     '#4ADE80',
@@ -12,15 +12,13 @@ const TICKS_POR_VELA = 4;
 
 interface GraficaVelasProps {
   onNuevoPrecioRef: React.MutableRefObject<((data: NuevoPrecioPayload) => void) | null>;
-  modoFuente: 'Swissquote' | 'API' | 'CSV' | null;
-  predicciones: ApuestaDemo[] | null;
-  estrategiaSeleccionada: ApuestaDemo | null;
+  predicciones: ApuestaEspeculativa[] | null;
+  estrategiaSeleccionada: ApuestaEspeculativa | null;
   segsRestantes: number | null;
 }
 
 export default function GraficaVelas({
   onNuevoPrecioRef,
-  modoFuente,
   predicciones,
   estrategiaSeleccionada,
   segsRestantes,
@@ -31,15 +29,16 @@ export default function GraficaVelas({
 
   const ticksEnVelaActualRef = useRef<number[]>([]);
 
-  const chartRef = useRef<any>(null);
-  const seriesRef = useRef<any>(null);
-  const lcRef = useRef<any>(null);
-  const estratLineasRef = useRef<Map<string, any>>(new Map());
+  const chartRef = useRef<IChartApi | null>(null);
+  const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
+  const lcRef = useRef<typeof import('lightweight-charts') | null>(null);
+  const estratLineasRef = useRef<Map<string, IPriceLine>>(new Map());
 
   useEffect(() => {
     if (typeof window === 'undefined' || !containerRef.current) return;
 
     let observerRef: ResizeObserver | null = null;
+    const lineasEstrategia = estratLineasRef.current;
 
     import('lightweight-charts').then((lc) => {
       if (!containerRef.current) return;
@@ -135,15 +134,17 @@ export default function GraficaVelas({
       chartRef.current = null;
       seriesRef.current = null;
       lcRef.current = null;
-      estratLineasRef.current.clear();
+      lineasEstrategia.clear();
     };
-  }, []);
+  }, [onNuevoPrecioRef]);
 
   useEffect(() => {
-    if (!seriesRef.current || !lcRef.current) return;
+    const series = seriesRef.current;
+    const lc = lcRef.current;
+    if (!series || !lc) return;
 
     estratLineasRef.current.forEach((l) => {
-      try { seriesRef.current?.removePriceLine(l); } catch {}
+      try { series.removePriceLine(l); } catch {}
     });
 
     estratLineasRef.current.clear();
@@ -158,19 +159,19 @@ export default function GraficaVelas({
 
       if (est.precioMin != null && est.precioMax != null) {
         // Conservadora: dos líneas punteadas que marcan el rango
-        const lineaMin = seriesRef.current.createPriceLine({
+        const lineaMin = series.createPriceLine({
           price: est.precioMin,
           color,
           lineWidth: 1,
-          lineStyle: lcRef.current.LineStyle.Dashed,
+          lineStyle: lc.LineStyle.Dashed,
           axisLabelVisible: true,
           title: `${est.nombre} ↓`,
         });
-        const lineaMax = seriesRef.current.createPriceLine({
+        const lineaMax = series.createPriceLine({
           price: est.precioMax,
           color,
           lineWidth: 1,
-          lineStyle: lcRef.current.LineStyle.Dashed,
+          lineStyle: lc.LineStyle.Dashed,
           axisLabelVisible: true,
           title: `${est.nombre} ↑`,
         });
@@ -178,11 +179,11 @@ export default function GraficaVelas({
         estratLineasRef.current.set(`${est.nombre}_max`, lineaMax);
       } else {
         // Agresiva / Tendencia: línea única
-        const linea = seriesRef.current.createPriceLine({
+        const linea = series.createPriceLine({
           price: est.precioEsperado,
           color,
           lineWidth: 2,
-          lineStyle: lcRef.current.LineStyle.Solid,
+          lineStyle: lc.LineStyle.Solid,
           axisLabelVisible: true,
           title: `${est.nombre} ${flecha}`,
         });
@@ -192,13 +193,14 @@ export default function GraficaVelas({
   }, [predicciones]);
 
   useEffect(() => {
-    if (!seriesRef.current || !estrategiaSeleccionada) return;
+    const series = seriesRef.current;
+    if (!series || !estrategiaSeleccionada) return;
 
     estratLineasRef.current.forEach((linea, clave) => {
       // La clave puede ser "Conservadora_min", "Conservadora_max" o "Agresiva" etc.
       const nombreBase = clave.replace(/_min$|_max$/, '');
       if (nombreBase !== estrategiaSeleccionada.nombre) {
-        try { seriesRef.current?.removePriceLine(linea); } catch { /* ignorar */ }
+        try { series.removePriceLine(linea); } catch { /* ignorar */ }
         estratLineasRef.current.delete(clave);
       }
     });

@@ -8,7 +8,7 @@ namespace SimuladorBackend.Services;
 /// Secuencial: Agresiva → Conservadora → Tendencia  (~30 s)
 /// Paralelo:   Task.WhenAll(Agresiva, Conservadora, Tendencia)  (~10 s)
 ///
-/// La selección de la estrategia ganadora es ALEATORIA para demostrar
+/// La selección de la estrategia ganadora es ALEATORIA para reflejar
 /// que la especulación puede acertar o fallar — no siempre gana la misma.
 /// </summary>
 public sealed class SimuladorService
@@ -26,7 +26,7 @@ public sealed class SimuladorService
         CancellationToken ct = default)
     {
         var sw = Stopwatch.StartNew();
-        List<ApuestaDemo> todas;
+        List<ApuestaEspeculativa> todas;
 
         if (modo == ModoEjecucion.Secuencial)
         {
@@ -62,16 +62,16 @@ public sealed class SimuladorService
     }
 
     // Selección aleatoria entre las 3 estrategias calculadas
-    private static ApuestaDemo SeleccionarAleatoria(List<ApuestaDemo> candidatas)
+    private static ApuestaEspeculativa SeleccionarAleatoria(List<ApuestaEspeculativa> candidatas)
         => candidatas[Random.Shared.Next(candidatas.Count)];
 }
 
 /// <summary>Resultado de un ciclo completo de especulación.</summary>
 public sealed class ResultadoEspeculacion
 {
-    public required ApuestaDemo       EstrategiaSeleccionada { get; init; }
-    public required List<ApuestaDemo> EstrategiasDescartadas { get; init; }
-    public required long              TiempoEjecucionMs      { get; init; }
-    public required ModoEjecucion     Modo                   { get; init; }
-    public required int               TickNumero             { get; init; }
+    public required ApuestaEspeculativa       EstrategiaSeleccionada { get; init; }
+    public required List<ApuestaEspeculativa> EstrategiasDescartadas { get; init; }
+    public required long                      TiempoEjecucionMs      { get; init; }
+    public required ModoEjecucion             Modo                   { get; init; }
+    public required int                       TickNumero             { get; init; }
 }
