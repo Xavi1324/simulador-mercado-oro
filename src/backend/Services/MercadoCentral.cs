@@ -247,12 +247,14 @@ public sealed class MercadoCentral : BackgroundService
         var apuesta   = resultado.EstrategiaSeleccionada;
         const decimal monto = 100m;
 
-        bool gano =
-            apuesta.Direccion == DireccionApuesta.Alcista ? precioFinal > precioAlApostar :
-            apuesta.Direccion == DireccionApuesta.Bajista ? precioFinal < precioAlApostar :
-            Math.Abs(precioFinal - apuesta.PrecioEsperado) <= MargenAceptable;
+        bool gano = apuesta.EsRango
+            ? precioFinal >= apuesta.PrecioMin!.Value && precioFinal <= apuesta.PrecioMax!.Value
+            : Math.Abs(precioFinal - apuesta.PrecioEsperado) <= MargenAceptable;
 
-        _portafolioService.RegistrarResultado(apuesta.Nombre, gano, monto);
+        _portafolioService.RegistrarResultado(
+            apuesta.Nombre, gano, monto,
+            precioAlApostar,
+            apuesta.PrecioEsperado);
 
         _logger.LogInformation(
             "Apuesta {N}: {R} (precio inicial={Pi} final={Pf})",
@@ -267,9 +269,11 @@ public sealed class MercadoCentral : BackgroundService
 
     private static object MapDto(ApuestaDemo a) => new
     {
-        nombre          = a.Nombre,
-        precioEsperado  = a.PrecioEsperado,
-        direccion       = a.Direccion.ToString(),
+        nombre           = a.Nombre,
+        precioEsperado   = a.PrecioEsperado,
+        precioMin        = a.PrecioMin,
+        precioMax        = a.PrecioMax,
+        direccion        = a.Direccion.ToString(),
         tiempoExpiracion = a.TiempoExpiracion.TotalMinutes >= 1
             ? $"{(int)a.TiempoExpiracion.TotalMinutes}m"
             : $"{(int)a.TiempoExpiracion.TotalSeconds}s",

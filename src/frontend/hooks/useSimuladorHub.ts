@@ -30,6 +30,8 @@ export function useSimuladorHub() {
   const [estrategiaSeleccionada, setEstrategiaSeleccionada] = useState<ApuestaDemo | null>(null);
   const [balanceDemo, setBalanceDemo]     = useState(0);
   const [logsDemo, setLogsDemo]           = useState<string[]>([]);
+  const [segsRestantes, setSegsRestantes] = useState<number | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Callbacks de alta frecuencia — via refs para evitar re-renders
   const onNuevoPrecioRef   = useRef<((data: NuevoPrecioPayload) => void) | null>(null);
@@ -85,6 +87,19 @@ export function useSimuladorHub() {
 
     hub.on('EstrategiaSeleccionada', (data: EstrategiaSeleccionadaPayload) => {
       setEstrategiaSeleccionada(data.seleccionada);
+
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      setSegsRestantes(60);
+      countdownRef.current = setInterval(() => {
+        setSegsRestantes(prev => {
+          if (prev === null || prev <= 1) {
+            clearInterval(countdownRef.current!);
+            countdownRef.current = null;
+            return null;
+          }
+          return prev - 1;
+        });
+      }, 1_000);
     });
 
     hub.on('PortafolioActualizado', (data: PortafolioActualizadoPayload) => {
@@ -92,6 +107,11 @@ export function useSimuladorHub() {
       if (data.ultimoEvento) {
         setLogsDemo(prev => [...prev.slice(-49), data.ultimoEvento!]);
       }
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
+      }
+      setSegsRestantes(null);
     });
 
     hub.onreconnecting(() => setConectado(false));
@@ -105,7 +125,10 @@ export function useSimuladorHub() {
       });
 
     hubRef.current = hub;
-    return () => { hub.stop(); };
+    return () => {
+      hub.stop();
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -149,5 +172,6 @@ export function useSimuladorHub() {
     balanceDemo,
     logsDemo,
     cambiarFuente,
+    segsRestantes,
   };
 }

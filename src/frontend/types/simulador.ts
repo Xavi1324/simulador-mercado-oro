@@ -68,6 +68,8 @@ export interface VelaDatos {
 export interface ApuestaDemo {
   nombre: string;
   precioEsperado: number;
+  precioMin?: number;   // solo Conservadora — extremo bajo del rango
+  precioMax?: number;   // solo Conservadora — extremo alto del rango
   direccion: 'Alcista' | 'Bajista' | 'Neutro';
   tiempoExpiracion: string;
 }

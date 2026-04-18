@@ -28,6 +28,7 @@ export default function Home() {
     estrategiaSeleccionada,
     balanceDemo,
     logsDemo,
+    segsRestantes,
   } = useSimuladorHub();
 
   const [nucleosDisponibles, setNucleosDisponibles] = useState(4);
@@ -122,6 +123,7 @@ export default function Home() {
           modoFuente={modoFuente}
           predicciones={predicciones}
           estrategiaSeleccionada={estrategiaSeleccionada}
+          segsRestantes={segsRestantes}
         />
 
         {/* Paneles — 2 columnas en pantallas grandes */}

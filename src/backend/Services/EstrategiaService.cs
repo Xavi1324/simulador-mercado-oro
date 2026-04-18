@@ -61,15 +61,19 @@ public sealed class EstrategiaService
 
         return Task.Run(() =>
         {
-            double estimado = MonteCarloConservadora(arr, p0, Iteraciones, ct);
-            // Conservadora → Neutro: precio esperado cerca del actual (±0.3%)
-            double maxDelta = p0 * 0.003;
-            double delta    = Math.Max(-maxDelta, Math.Min(maxDelta, estimado - p0));
-            decimal esperado = Math.Round((decimal)(p0 + delta), 2);
+            double estimado  = MonteCarloConservadora(arr, p0, Iteraciones, ct);
+            // Conservadora → rango ±0.3% alrededor del precio actual
+            double maxDelta  = p0 * 0.003;
+            double delta     = Math.Max(-maxDelta, Math.Min(maxDelta, estimado - p0));
+            decimal centro   = Math.Round((decimal)(p0 + delta), 2);
+            decimal minRango = Math.Round((decimal)(p0 - maxDelta), 2);
+            decimal maxRango = Math.Round((decimal)(p0 + maxDelta), 2);
             return new ApuestaDemo
             {
                 Nombre           = "Conservadora",
-                PrecioEsperado   = esperado,
+                PrecioEsperado   = centro,
+                PrecioMin        = minRango,
+                PrecioMax        = maxRango,
                 Direccion        = DireccionApuesta.Neutro,
                 TiempoExpiracion = TimeSpan.FromMinutes(1),
                 MomentoCreacion  = DateTime.UtcNow,
@@ -240,11 +244,16 @@ public sealed class EstrategiaService
 public sealed class ApuestaDemo
 {
     public string           Nombre           { get; init; } = string.Empty;
-    public decimal          PrecioEsperado   { get; init; }
+    public decimal          PrecioEsperado   { get; init; }  // punto central (Agresiva / Tendencia)
+    public decimal?         PrecioMin        { get; init; }  // extremo bajo del rango (Conservadora)
+    public decimal?         PrecioMax        { get; init; }  // extremo alto del rango (Conservadora)
     public DireccionApuesta Direccion        { get; init; }
     public TimeSpan         TiempoExpiracion { get; init; }
     public DateTime         MomentoCreacion  { get; init; }
     public DateTime         MomentoExpiracion => MomentoCreacion.Add(TiempoExpiracion);
+
+    /// <summary>True cuando la estrategia predice un rango en lugar de un punto exacto.</summary>
+    public bool EsRango => PrecioMin.HasValue && PrecioMax.HasValue;
 }
 
 public enum DireccionApuesta { Alcista, Bajista, Neutro }

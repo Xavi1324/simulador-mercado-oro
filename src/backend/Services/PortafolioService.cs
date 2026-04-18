@@ -31,14 +31,17 @@ public sealed class PortafolioService
     /// Registra el resultado de una apuesta y actualiza el balance.
     /// El lock garantiza que escrituras concurrentes no corrompan el saldo.
     /// </summary>
-    public void RegistrarResultado(string nombreApuesta, bool gano, decimal monto)
+    public void RegistrarResultado(
+        string nombreApuesta, bool gano, decimal monto,
+        decimal precioEntrada, decimal precioEsperado)
     {
         lock (_lock)
         {
             _balance += gano ? monto : -monto;
-            string estado = gano ? "GANADA" : "PERDIDA";
+            string emoji = gano ? "✅" : "❌";
             _historial.Add(
-                $"[{DateTime.UtcNow:HH:mm:ss}] {nombreApuesta} - {estado} - Balance: ${_balance:F2}");
+                $"[{DateTime.UtcNow:HH:mm:ss}] {nombreApuesta}: " +
+                $"${precioEntrada:N2} — ${precioEsperado:N2} {emoji}");
         }
     }
 
