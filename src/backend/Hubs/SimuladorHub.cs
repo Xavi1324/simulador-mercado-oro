@@ -1,17 +1,27 @@
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Options;
+using SimuladorBackend.Options;
 using SimuladorBackend.Services;
 
 namespace SimuladorBackend.Hubs;
 
 public class SimuladorHub : Hub
 {
-    private readonly MercadoCentral _mercadoCentral;
-    private readonly MetricasEngine _metricasEngine;
+    private readonly MercadoCentral  _mercadoCentral;
+    private readonly MetricasEngine  _metricasEngine;
+    private readonly FuenteDeDatos   _fuenteDeDatos;
+    private readonly SimuladorOptions _opciones;
 
-    public SimuladorHub(MercadoCentral mercadoCentral, MetricasEngine metricasEngine)
+    public SimuladorHub(
+        MercadoCentral mercadoCentral,
+        MetricasEngine metricasEngine,
+        FuenteDeDatos fuenteDeDatos,
+        IOptions<SimuladorOptions> opciones)
     {
         _mercadoCentral = mercadoCentral;
         _metricasEngine = metricasEngine;
+        _fuenteDeDatos  = fuenteDeDatos;
+        _opciones       = opciones.Value;
     }
 
     public async Task IniciarSimulacion(int nucleos, int intervaloSegundos, string modo = "Paralelo")
@@ -22,10 +32,12 @@ public class SimuladorHub : Hub
 
         await Clients.Caller.SendAsync("EstadoInicial", new
         {
-            simulacionActiva   = true,
+            simulacionActiva        = true,
             nucleos,
-            nucleosDisponibles = Environment.ProcessorCount,
+            nucleosDisponibles      = Environment.ProcessorCount,
             ultimasMetricas,
+            saldoInicialPortafolio  = _opciones.SaldoInicialPortafolio,
+            balanceInicialDemo      = _opciones.BalanceInicialDemo,
         });
     }
 
@@ -34,10 +46,12 @@ public class SimuladorHub : Hub
         _mercadoCentral.Pausar();
         await Clients.Caller.SendAsync("EstadoInicial", new
         {
-            simulacionActiva   = false,
-            nucleos            = 1,
-            nucleosDisponibles = Environment.ProcessorCount,
-            ultimasMetricas   = _metricasEngine.ObtenerUltimasMetricas(10),
+            simulacionActiva       = false,
+            nucleos                = 1,
+            nucleosDisponibles     = Environment.ProcessorCount,
+            ultimasMetricas        = _metricasEngine.ObtenerUltimasMetricas(10),
+            saldoInicialPortafolio = _opciones.SaldoInicialPortafolio,
+            balanceInicialDemo     = _opciones.BalanceInicialDemo,
         });
     }
 
@@ -45,6 +59,12 @@ public class SimuladorHub : Hub
     {
         _mercadoCentral.Configurar(nucleos, intervaloSegundos);
         return Task.CompletedTask;
+    }
+
+    public async Task CambiarFuente(string fuente)
+    {
+        _fuenteDeDatos.SetModo(fuente == "CSV");
+        await Clients.All.SendAsync("ModoFuenteChanged", fuente);
     }
 
     // ── Ciclo especulativo: automático en MercadoCentral ─────────────────────
@@ -56,10 +76,12 @@ public class SimuladorHub : Hub
 
         await Clients.Caller.SendAsync("EstadoInicial", new
         {
-            simulacionActiva   = _mercadoCentral.EstaActivo,
-            nucleos            = 1,
-            nucleosDisponibles = Environment.ProcessorCount,
+            simulacionActiva       = _mercadoCentral.EstaActivo,
+            nucleos                = 1,
+            nucleosDisponibles     = Environment.ProcessorCount,
             ultimasMetricas,
+            saldoInicialPortafolio = _opciones.SaldoInicialPortafolio,
+            balanceInicialDemo     = _opciones.BalanceInicialDemo,
         });
 
         await base.OnConnectedAsync();

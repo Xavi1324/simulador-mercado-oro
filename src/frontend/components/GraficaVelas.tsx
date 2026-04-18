@@ -161,7 +161,7 @@ export default function GraficaVelas({
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="bg-slate-800 rounded-xl overflow-hidden">
+    <div className="bg-slate-800 rounded-xl overflow-hidden  border border-slate-700">
       <div className="relative">
         {/* Precio actual */}
         <div className="absolute top-3 left-4 z-10">

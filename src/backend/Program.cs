@@ -1,8 +1,13 @@
 using SimuladorBackend.Hubs;
 using SimuladorBackend.Models;
+using SimuladorBackend.Options;
 using SimuladorBackend.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ── Configuración ─────────────────────────────────────────────────────────
+builder.Services.Configure<SimuladorOptions>(
+    builder.Configuration.GetSection(SimuladorOptions.SectionName));
 
 // ── Servicios ─────────────────────────────────────────────────────────────
 builder.Services.AddControllers();

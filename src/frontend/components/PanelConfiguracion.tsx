@@ -8,9 +8,12 @@ interface PanelConfiguracionProps {
   simulacionActiva: boolean;
   isCalculando: boolean;
   balanceDemo: number;
+  balanceInicialDemo: number;
+  modoFuente: 'Swissquote' | 'API' | 'CSV' | null;
   onIniciar: (nucleos: number, intervalo: number, modo: 'Secuencial' | 'Paralelo') => void;
   onPausar: () => void;
   onConfigurar: (nucleos: number, intervalo: number) => void;
+  onCambiarFuente: (fuente: 'Swissquote' | 'CSV') => void;
 }
 
 export default function PanelConfiguracion({
@@ -19,9 +22,12 @@ export default function PanelConfiguracion({
   simulacionActiva,
   isCalculando,
   balanceDemo,
+  balanceInicialDemo,
+  modoFuente,
   onIniciar,
   onPausar,
   onConfigurar,
+  onCambiarFuente,
 }: PanelConfiguracionProps) {
   const [nucleos, setNucleos]     = useState(1);
   const [intervalo, setIntervalo] = useState(2);
@@ -80,6 +86,32 @@ export default function PanelConfiguracion({
               {seg}s
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* Fuente de datos */}
+      <div>
+        <p className="text-slate-400 text-sm mb-2">Fuente de datos</p>
+        <div className="flex gap-2">
+          {(['Swissquote', 'CSV'] as const).map((f) => {
+            const activo = modoFuente === f || (f === 'Swissquote' && (modoFuente === 'API' || modoFuente === null));
+            return (
+              <button
+                key={f}
+                onClick={() => onCambiarFuente(f)}
+                disabled={!conectado}
+                className={`flex-1 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                  activo
+                    ? f === 'CSV'
+                      ? 'bg-yellow-700 text-yellow-100'
+                      : 'bg-blue-700 text-blue-100'
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                }`}
+              >
+                {f === 'CSV' ? '📂 CSV Histórico' : '🌐 Swissquote'}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -145,7 +177,7 @@ export default function PanelConfiguracion({
           <span className="text-slate-400 text-xs">Portafolio demo</span>
           <span
             className={`text-sm font-bold font-mono ${
-              balanceDemo >= 1_000 ? 'text-green-400' : 'text-red-400'
+              balanceDemo >= balanceInicialDemo ? 'text-green-400' : 'text-red-400'
             }`}
           >
             ${balanceDemo.toFixed(2)}

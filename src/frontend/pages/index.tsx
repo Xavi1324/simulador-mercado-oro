@@ -18,6 +18,7 @@ export default function Home() {
     iniciar,
     pausar,
     configurar,
+    cambiarFuente,
     onNuevoPrecioRef,
     onNuevaMetricaRef,
     isCalculando,
@@ -131,9 +132,12 @@ export default function Home() {
             simulacionActiva={simulacionActiva}
             isCalculando={isCalculando}
             balanceDemo={balanceDemo}
+            balanceInicialDemo={estadoInicial?.balanceInicialDemo ?? 1_000}
+            modoFuente={modoFuente}
             onIniciar={handleIniciar}
             onPausar={handlePausar}
             onConfigurar={configurar}
+            onCambiarFuente={cambiarFuente}
           />
           <PanelMetricas
             onNuevaMetricaRef={onNuevaMetricaRef}

@@ -34,6 +34,8 @@ export interface EstadoInicialPayload {
   nucleos: number;
   nucleosDisponibles: number;
   ultimasMetricas: MetricaCiclo[];
+  saldoInicialPortafolio: number;
+  balanceInicialDemo: number;
 }
 
 // Fila de métricas históricas

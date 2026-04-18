@@ -17,6 +17,18 @@ public sealed class FuenteDeDatos
     private decimal  _ultimoPrecioReal;
     private string   _ultimaFuenteReal = string.Empty;
 
+    // ── Modo CSV histórico ────────────────────────────────────────────────────
+    private volatile bool      _usarCsv   = false;
+    private          List<decimal> _preciosCsv = [];
+    private          int        _csvIndex  = 0;
+    private readonly object    _csvLock   = new();
+
+    public void SetModo(bool usarCsv)
+    {
+        _usarCsv = usarCsv;
+        _logger.LogInformation("Fuente de datos cambiada a: {Modo}", usarCsv ? "CSV histórico" : "Swissquote");
+    }
+
     public FuenteDeDatos(IHttpClientFactory httpClientFactory, IConfiguration config, ILogger<FuenteDeDatos> logger)
     {
         _httpClientFactory = httpClientFactory;
@@ -26,6 +38,9 @@ public sealed class FuenteDeDatos
 
     public async Task<(decimal precio, string fuente)> ObtenerPrecio()
     {
+        if (_usarCsv)
+            return ObtenerDeCsv();
+
         // Nivel 1: Swissquote (gratuito, sin API key)
         try
         {
@@ -134,6 +149,45 @@ public sealed class FuenteDeDatos
         }
 
         throw new InvalidDataException("No se encontró ningún bid/ask válido en la respuesta de Swissquote.");
+    }
+
+    // ── CSV histórico ─────────────────────────────────────────────────────────
+
+    private (decimal precio, string fuente) ObtenerDeCsv()
+    {
+        lock (_csvLock)
+        {
+            if (_preciosCsv.Count == 0)
+                CargarCsv();
+
+            var precio = _preciosCsv[_csvIndex % _preciosCsv.Count];
+            _csvIndex++;
+            return (precio, "CSV");
+        }
+    }
+
+    private void CargarCsv()
+    {
+        var ruta = Path.Combine(Directory.GetCurrentDirectory(), "metrics", "gold_historical.csv");
+
+        if (!File.Exists(ruta))
+            throw new FileNotFoundException($"No se encontró el CSV histórico en: {ruta}");
+
+        var precios = new List<decimal>();
+        foreach (var linea in File.ReadLines(ruta).Skip(1)) // saltar header
+        {
+            var cols = linea.Split(',');
+            if (cols.Length >= 5 && decimal.TryParse(cols[4], System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out decimal close) && close > 0)
+                precios.Add(close);
+        }
+
+        if (precios.Count == 0)
+            throw new InvalidDataException("El CSV histórico no contiene precios válidos.");
+
+        _preciosCsv = precios;
+        _logger.LogInformation("CSV histórico cargado: {N} precios (rango ${Min}–${Max})",
+            precios.Count, precios.Min(), precios.Max());
     }
 
     // ── Metals-API ────────────────────────────────────────────────────────────

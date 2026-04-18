@@ -1,4 +1,6 @@
+using Microsoft.Extensions.Options;
 using SimuladorBackend.Models;
+using SimuladorBackend.Options;
 
 namespace SimuladorBackend.Services;
 
@@ -9,9 +11,16 @@ namespace SimuladorBackend.Services;
 /// </summary>
 public sealed class PortafolioService
 {
-    private readonly object      _lock     = new();
-    private          decimal     _balance  = 1_000m;
-    private readonly List<string> _historial = [];
+    private readonly object       _lock           = new();
+    private readonly decimal      _balanceInicial;
+    private          decimal      _balance;
+    private readonly List<string> _historial      = [];
+
+    public PortafolioService(IOptions<SimuladorOptions> options)
+    {
+        _balanceInicial = options.Value.BalanceInicialDemo;
+        _balance        = _balanceInicial;
+    }
 
     public decimal Balance
     {
@@ -42,7 +51,7 @@ public sealed class PortafolioService
     {
         lock (_lock)
         {
-            _balance = 1_000m;
+            _balance = _balanceInicial;
             _historial.Clear();
         }
     }

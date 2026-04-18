@@ -28,7 +28,7 @@ export function useSimuladorHub() {
   const [tiempoMsDemo, setTiempoMsDemo]   = useState<number | null>(null);
   const [predicciones, setPredicciones]   = useState<ApuestaDemo[] | null>(null);
   const [estrategiaSeleccionada, setEstrategiaSeleccionada] = useState<ApuestaDemo | null>(null);
-  const [balanceDemo, setBalanceDemo]     = useState(10_000);
+  const [balanceDemo, setBalanceDemo]     = useState(0);
   const [logsDemo, setLogsDemo]           = useState<string[]>([]);
 
   // Callbacks de alta frecuencia — via refs para evitar re-renders
@@ -65,6 +65,7 @@ export function useSimuladorHub() {
 
     hub.on('EstadoInicial', (data: EstadoInicialPayload) => {
       setEstadoInicial(data);
+      setBalanceDemo(data.balanceInicialDemo);
     });
 
     // ── Demo: Descomposición Especulativa ────────────────────────────────────
@@ -124,6 +125,11 @@ export function useSimuladorHub() {
     hubRef.current.invoke('Configurar', nucleos, intervaloSegundos);
   }, [conectado]);
 
+  const cambiarFuente = useCallback((fuente: 'Swissquote' | 'CSV') => {
+    if (!hubRef.current || !conectado) return;
+    hubRef.current.invoke('CambiarFuente', fuente);
+  }, [conectado]);
+
   return {
     conectado,
     modoFuente,
@@ -142,5 +148,6 @@ export function useSimuladorHub() {
     estrategiaSeleccionada,
     balanceDemo,
     logsDemo,
+    cambiarFuente,
   };
 }

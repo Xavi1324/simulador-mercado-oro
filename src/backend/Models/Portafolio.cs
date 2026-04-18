@@ -1,16 +1,26 @@
 using System.Diagnostics;
+using Microsoft.Extensions.Options;
 using SimuladorBackend.Models;
+using SimuladorBackend.Options;
 
 namespace SimuladorBackend.Models;
 
 public class Portafolio
 {
-    private readonly object _lock = new();
-    private decimal _saldo = 10_000m;
+    private readonly object  _lock         = new();
+    private readonly decimal _saldoInicial;
+    private          decimal _saldo;
     private long _tiempoEsperaLockMs;
     private int _adquisicionesLock;
 
-    public decimal Saldo { get; private set; } = 10_000m;
+    public decimal Saldo { get; private set; }
+
+    public Portafolio(IOptions<SimuladorOptions> options)
+    {
+        _saldoInicial = options.Value.SaldoInicialPortafolio;
+        _saldo        = _saldoInicial;
+        Saldo         = _saldoInicial;
+    }
     public long TiempoEsperaLockMs => _tiempoEsperaLockMs;
     public int AdquisicionesLock => _adquisicionesLock;
 
@@ -44,7 +54,7 @@ public class Portafolio
     {
         lock (_lock)
         {
-            _saldo = 10_000m;
+            _saldo = _saldoInicial;
             Saldo = _saldo;
             _tiempoEsperaLockMs = 0;
             _adquisicionesLock = 0;
