@@ -1,5 +1,9 @@
 using SimuladorBackend.Models;
 using SimuladorBackend.Services;
+using SimuladorBackend.Hubs;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace SimuladorBackend.Tests;
@@ -110,6 +114,19 @@ public class PortafolioTests
     }
 
     [Fact]
+    public void PortafolioService_GanadaLuegoPerdida_ConservaSaldoAcumulado()
+    {
+        var portafolio = new Portafolio();
+        var service = new PortafolioService(portafolio);
+
+        service.RegistrarResultado("Tendencia", true, 100m, 2959.51m, 2959.01m);
+        service.RegistrarResultado("Conservadora", false, 100m, 2949.58m, 2958.43m);
+
+        Assert.Equal(1_000m, portafolio.Saldo);
+        Assert.Equal(portafolio.Saldo, service.Balance);
+    }
+
+    [Fact]
     public async Task PruebaCargaPortafolio_OperacionesAleatorias_CoincideConSaldoEsperado()
     {
         var portafolio = new Portafolio();
@@ -162,5 +179,64 @@ public class PortafolioTests
         Assert.True(resultado.Consistente);
         Assert.Equal(resultado.Operaciones, resultado.Ganadas + resultado.Perdidas);
         Assert.Equal(resultado.SaldoEsperado, resultado.SaldoObtenido);
+    }
+
+    [Fact]
+    public void MercadoCentral_Iniciar_ConservaSaldoYConfiguracion()
+    {
+        var portafolio = new Portafolio();
+        var portafolioService = new PortafolioService(portafolio);
+        var mercado = CrearMercadoCentral(portafolio, portafolioService);
+
+        portafolioService.RegistrarResultado("Tendencia", true, 100m, 2959.51m, 2959.01m);
+
+        mercado.Iniciar(7, 2);
+
+        Assert.Equal(1_100m, portafolio.Saldo);
+        Assert.Equal(7, mercado.NucleosActuales);
+        Assert.Equal(2, mercado.IntervaloSegundosActual);
+    }
+
+    private static MercadoCentral CrearMercadoCentral(Portafolio portafolio, PortafolioService portafolioService)
+    {
+        var config = new ConfigurationBuilder().Build();
+        var fuente = new FuenteDeDatos(
+            new FakeHttpClientFactory(),
+            config,
+            new TestLogger<FuenteDeDatos>());
+
+        return new MercadoCentral(
+            fuente,
+            new MetricasEngine(),
+            portafolio,
+            new SimuladorService(new EstrategiaService()),
+            portafolioService,
+            new FakeHubContext(),
+            new TestLogger<MercadoCentral>());
+    }
+
+    private sealed class FakeHttpClientFactory : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new();
+    }
+
+    private sealed class FakeHubContext : IHubContext<SimuladorHub>
+    {
+        public IHubClients Clients => throw new NotSupportedException();
+        public IGroupManager Groups => throw new NotSupportedException();
+    }
+
+    private sealed class TestLogger<T> : ILogger<T>
+    {
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel logLevel) => false;
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+        }
     }
 }
