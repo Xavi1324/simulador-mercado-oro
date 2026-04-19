@@ -139,6 +139,63 @@ public class EstrategiasTests
         Assert.Contains(estrategias, e => e.Nombre == "Tendencia");
     }
 
+    // ── Monte Carlo particionado ──────────────────────────────────────────
+
+    [Fact]
+    public async Task EstrategiaService_Agresiva_UnNucleo_DevuelveApuestaAlcista()
+    {
+        var service = new EstrategiaService();
+        var historial = Enumerable.Range(0, 20).Select(i => 3000m + i).ToList();
+
+        var apuesta = await service.CalcularAgresiva(3020m, historial, nucleos: 1, CancellationToken.None);
+
+        Assert.Equal("Agresiva", apuesta.Nombre);
+        Assert.Equal(DireccionApuesta.Alcista, apuesta.Direccion);
+        Assert.True(apuesta.PrecioEsperado > 3020m);
+    }
+
+    [Fact]
+    public async Task EstrategiaService_Agresiva_VariosNucleos_DevuelveApuestaAlcista()
+    {
+        var service = new EstrategiaService();
+        var historial = Enumerable.Range(0, 20).Select(i => 3000m + i).ToList();
+
+        var apuesta = await service.CalcularAgresiva(3020m, historial, nucleos: 4, CancellationToken.None);
+
+        Assert.Equal("Agresiva", apuesta.Nombre);
+        Assert.Equal(DireccionApuesta.Alcista, apuesta.Direccion);
+        Assert.True(apuesta.PrecioEsperado > 3020m);
+    }
+
+    [Fact]
+    public async Task EstrategiaService_Conservadora_VariosNucleos_DevuelveRangoValido()
+    {
+        var service = new EstrategiaService();
+        var historial = Enumerable.Range(0, 20).Select(i => 3000m + i).ToList();
+
+        var apuesta = await service.CalcularConservadora(3020m, historial, nucleos: 4, CancellationToken.None);
+
+        Assert.Equal("Conservadora", apuesta.Nombre);
+        Assert.Equal(DireccionApuesta.Neutro, apuesta.Direccion);
+        Assert.NotNull(apuesta.PrecioMin);
+        Assert.NotNull(apuesta.PrecioMax);
+        Assert.True(apuesta.PrecioMin <= apuesta.PrecioEsperado);
+        Assert.True(apuesta.PrecioEsperado <= apuesta.PrecioMax);
+    }
+
+    [Fact]
+    public async Task EstrategiaService_Tendencia_VariosNucleos_DevuelveApuestaBajista()
+    {
+        var service = new EstrategiaService();
+        var historial = Enumerable.Range(0, 20).Select(i => 3000m + i).ToList();
+
+        var apuesta = await service.CalcularTendencia(3020m, historial, nucleos: 4, CancellationToken.None);
+
+        Assert.Equal("Tendencia", apuesta.Nombre);
+        Assert.Equal(DireccionApuesta.Bajista, apuesta.Direccion);
+        Assert.True(apuesta.PrecioEsperado < 3020m);
+    }
+
     // ── Validación de apuesta especulativa ─────────────────────────────────
 
     [Fact]

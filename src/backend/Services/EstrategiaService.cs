@@ -9,8 +9,9 @@ namespace SimuladorBackend.Services;
 /// de precios (con ruido gaussiano), devolviendo la media de todas las estimaciones.
 /// Esto es trabajo genuinamente CPU-bound que demuestra la ventaja del paralelismo:
 ///
-///   Secuencial → Agresiva + Conservadora + Tendencia  (tiempo total = suma)
-///   Paralelo   → Task.WhenAll(Agresiva, Conservadora, Tendencia) (tiempo = máximo)
+///   Secuencial → Agresiva + Conservadora + Tendencia con 1 partición por estrategia
+///   Paralelo   → Task.WhenAll(Agresiva, Conservadora, Tendencia), y cada estrategia
+///                divide sus iteraciones entre los núcleos seleccionados.
 ///
 /// Ajustar <see cref="Iteraciones"/> según el hardware:
 ///   - Demasiado rápido (&lt;500 ms) → subir a 8_000_000
@@ -25,92 +26,112 @@ public sealed class EstrategiaService
 
     // ── Métodos públicos ──────────────────────────────────────────────────────
 
-    public Task<ApuestaEspeculativa> CalcularAgresiva(
+    public async Task<ApuestaEspeculativa> CalcularAgresiva(
         decimal precioActual,
         IReadOnlyList<decimal> historial,
+        int nucleos,
         CancellationToken ct)
     {
         var arr = HistorialDouble(historial, precioActual);
         double p0 = (double)precioActual;
 
-        return Task.Run(() =>
+        double estimado = await MonteCarloParticionado(arr, p0, Iteraciones, nucleos, MonteCarloAgresivaSuma, ct);
+        // Agresiva → siempre Alcista: precio esperado > precio actual
+        double delta = Math.Abs(estimado - p0);
+        if (delta < 0.50) delta = 0.50; // mínimo $0.50 de movimiento al alza
+        decimal esperado = Math.Round((decimal)(p0 + delta), 2);
+        return new ApuestaEspeculativa
         {
-            double estimado = MonteCarloAgresiva(arr, p0, Iteraciones, ct);
-            // Agresiva → siempre Alcista: precio esperado > precio actual
-            double delta = Math.Abs(estimado - p0);
-            if (delta < 0.50) delta = 0.50; // mínimo $0.50 de movimiento al alza
-            decimal esperado = Math.Round((decimal)(p0 + delta), 2);
-            return new ApuestaEspeculativa
-            {
-                Nombre           = "Agresiva",
-                PrecioEsperado   = esperado,
-                Direccion        = DireccionApuesta.Alcista,
-                TiempoExpiracion = TimeSpan.FromMinutes(1),
-                MomentoCreacion  = DateTime.UtcNow,
-            };
-        }, ct);
+            Nombre           = "Agresiva",
+            PrecioEsperado   = esperado,
+            Direccion        = DireccionApuesta.Alcista,
+            TiempoExpiracion = TimeSpan.FromMinutes(1),
+            MomentoCreacion  = DateTime.UtcNow,
+        };
     }
 
-    public Task<ApuestaEspeculativa> CalcularConservadora(
+    public async Task<ApuestaEspeculativa> CalcularConservadora(
         decimal precioActual,
         IReadOnlyList<decimal> historial,
+        int nucleos,
         CancellationToken ct)
     {
         var arr = HistorialDouble(historial, precioActual);
         double p0 = (double)precioActual;
 
-        return Task.Run(() =>
+        double estimado  = await MonteCarloParticionado(arr, p0, Iteraciones, nucleos, MonteCarloConservadoraSuma, ct);
+        // Conservadora → rango ±0.3% alrededor del precio actual
+        double maxDelta  = p0 * 0.003;
+        double delta     = Math.Max(-maxDelta, Math.Min(maxDelta, estimado - p0));
+        decimal centro   = Math.Round((decimal)(p0 + delta), 2);
+        decimal minRango = Math.Round((decimal)(p0 - maxDelta), 2);
+        decimal maxRango = Math.Round((decimal)(p0 + maxDelta), 2);
+        return new ApuestaEspeculativa
         {
-            double estimado  = MonteCarloConservadora(arr, p0, Iteraciones, ct);
-            // Conservadora → rango ±0.3% alrededor del precio actual
-            double maxDelta  = p0 * 0.003;
-            double delta     = Math.Max(-maxDelta, Math.Min(maxDelta, estimado - p0));
-            decimal centro   = Math.Round((decimal)(p0 + delta), 2);
-            decimal minRango = Math.Round((decimal)(p0 - maxDelta), 2);
-            decimal maxRango = Math.Round((decimal)(p0 + maxDelta), 2);
-            return new ApuestaEspeculativa
-            {
-                Nombre           = "Conservadora",
-                PrecioEsperado   = centro,
-                PrecioMin        = minRango,
-                PrecioMax        = maxRango,
-                Direccion        = DireccionApuesta.Neutro,
-                TiempoExpiracion = TimeSpan.FromMinutes(1),
-                MomentoCreacion  = DateTime.UtcNow,
-            };
-        }, ct);
+            Nombre           = "Conservadora",
+            PrecioEsperado   = centro,
+            PrecioMin        = minRango,
+            PrecioMax        = maxRango,
+            Direccion        = DireccionApuesta.Neutro,
+            TiempoExpiracion = TimeSpan.FromMinutes(1),
+            MomentoCreacion  = DateTime.UtcNow,
+        };
     }
 
-    public Task<ApuestaEspeculativa> CalcularTendencia(
+    public async Task<ApuestaEspeculativa> CalcularTendencia(
         decimal precioActual,
         IReadOnlyList<decimal> historial,
+        int nucleos,
         CancellationToken ct)
     {
         var arr = HistorialDouble(historial, precioActual);
         double p0 = (double)precioActual;
 
-        return Task.Run(() =>
+        double estimado = await MonteCarloParticionado(arr, p0, Iteraciones, nucleos, MonteCarloTendenciaSuma, ct);
+        // Tendencia → siempre Bajista: precio esperado < precio actual
+        double delta = Math.Abs(estimado - p0);
+        if (delta < 0.50) delta = 0.50; // mínimo $0.50 de movimiento a la baja
+        decimal esperado = Math.Round((decimal)(p0 - delta), 2);
+        return new ApuestaEspeculativa
         {
-            double estimado = MonteCarloTendencia(arr, p0, Iteraciones, ct);
-            // Tendencia → siempre Bajista: precio esperado < precio actual
-            double delta = Math.Abs(estimado - p0);
-            if (delta < 0.50) delta = 0.50; // mínimo $0.50 de movimiento a la baja
-            decimal esperado = Math.Round((decimal)(p0 - delta), 2);
-            return new ApuestaEspeculativa
-            {
-                Nombre           = "Tendencia",
-                PrecioEsperado   = esperado,
-                Direccion        = DireccionApuesta.Bajista,
-                TiempoExpiracion = TimeSpan.FromMinutes(1),
-                MomentoCreacion  = DateTime.UtcNow,
-            };
-        }, ct);
+            Nombre           = "Tendencia",
+            PrecioEsperado   = esperado,
+            Direccion        = DireccionApuesta.Bajista,
+            TiempoExpiracion = TimeSpan.FromMinutes(1),
+            MomentoCreacion  = DateTime.UtcNow,
+        };
     }
 
     // ── Monte Carlo — Estrategia Agresiva ─────────────────────────────────────
     // Desviación estándar de 5 muestras bootstrap × 2.5 → movimiento brusco
 
-    private static double MonteCarloAgresiva(double[] arr, double precioActual, int n, CancellationToken ct)
+    private static async Task<double> MonteCarloParticionado(
+        double[] arr,
+        double precioActual,
+        int iteraciones,
+        int nucleos,
+        Func<double[], double, int, CancellationToken, double> calcularSuma,
+        CancellationToken ct)
+    {
+        int particiones = Math.Clamp(nucleos, 1, Math.Max(1, Environment.ProcessorCount));
+        if (particiones > iteraciones) particiones = iteraciones;
+
+        int basePorParticion = iteraciones / particiones;
+        int residuo = iteraciones % particiones;
+
+        var tareas = Enumerable.Range(0, particiones)
+            .Select(i =>
+            {
+                int iteracionesParticion = basePorParticion + (i < residuo ? 1 : 0);
+                return Task.Run(() => calcularSuma(arr, precioActual, iteracionesParticion, ct), ct);
+            })
+            .ToArray();
+
+        double[] sumas = await Task.WhenAll(tareas);
+        return sumas.Sum() / iteraciones;
+    }
+
+    private static double MonteCarloAgresivaSuma(double[] arr, double precioActual, int n, CancellationToken ct)
     {
         var rng   = new Random(NuevaSemilla());
         int len   = arr.Length;
@@ -139,13 +160,13 @@ public sealed class EstrategiaService
             suma += ultimo + stdDev * 2.5 * direccion;
         }
 
-        return suma / n;
+        return suma;
     }
 
     // ── Monte Carlo — Estrategia Conservadora ─────────────────────────────────
     // Promedio móvil 20 muestras bootstrap → regresión 30% hacia la media
 
-    private static double MonteCarloConservadora(double[] arr, double precioActual, int n, CancellationToken ct)
+    private static double MonteCarloConservadoraSuma(double[] arr, double precioActual, int n, CancellationToken ct)
     {
         var rng  = new Random(NuevaSemilla());
         int len  = arr.Length;
@@ -165,13 +186,13 @@ public sealed class EstrategiaService
             suma += ultimo + (media - ultimo) * 0.30;
         }
 
-        return suma / n;
+        return suma;
     }
 
     // ── Monte Carlo — Estrategia Tendencia ────────────────────────────────────
     // Regresión lineal sobre 10 muestras bootstrap → continuar tendencia
 
-    private static double MonteCarloTendencia(double[] arr, double precioActual, int n, CancellationToken ct)
+    private static double MonteCarloTendenciaSuma(double[] arr, double precioActual, int n, CancellationToken ct)
     {
         var rng  = new Random(NuevaSemilla());
         int len  = arr.Length;
@@ -203,7 +224,7 @@ public sealed class EstrategiaService
             suma += ultimo + pendiente;
         }
 
-        return suma / n;
+        return suma;
     }
 
     // ── Utilidades ────────────────────────────────────────────────────────────

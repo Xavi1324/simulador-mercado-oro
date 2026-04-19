@@ -5,8 +5,9 @@ namespace SimuladorBackend.Services;
 /// <summary>
 /// Orquesta la ejecución de estrategias en modo Secuencial o Paralelo.
 ///
-/// Secuencial: Agresiva → Conservadora → Tendencia  (~30 s)
-/// Paralelo:   Task.WhenAll(Agresiva, Conservadora, Tendencia)  (~10 s)
+/// Secuencial: Agresiva → Conservadora → Tendencia con 1 partición por estrategia.
+/// Paralelo:   Task.WhenAll(Agresiva, Conservadora, Tendencia), cada una particionada
+///             por los núcleos seleccionados.
 ///
 /// La selección de la estrategia ganadora es ALEATORIA para reflejar
 /// que la especulación puede acertar o fallar — no siempre gana la misma.
@@ -33,7 +34,7 @@ public sealed class SimuladorService
         if (modo == ModoEjecucion.Secuencial)
         {
             var swSeq = Stopwatch.StartNew();
-            todas = await CalcularSecuencial(precioActual, historial, ct);
+            todas = await CalcularSecuencial(precioActual, historial, 1, ct);
             swSeq.Stop();
 
             tiempoSecuencialMs = Math.Max(swSeq.ElapsedMilliseconds, 1);
@@ -41,13 +42,13 @@ public sealed class SimuladorService
         }
         else
         {
-            // Baseline real secuencial para comparar contra el trabajo paralelo real.
+            // Baseline secuencial con 1 partición para comparar contra el trabajo paralelo real.
             var swSeq = Stopwatch.StartNew();
-            await CalcularSecuencial(precioActual, historial, ct);
+            await CalcularSecuencial(precioActual, historial, 1, ct);
             swSeq.Stop();
 
             var swPar = Stopwatch.StartNew();
-            todas = await CalcularParalelo(precioActual, historial, ct);
+            todas = await CalcularParalelo(precioActual, historial, nucleos, ct);
             swPar.Stop();
 
             tiempoSecuencialMs = Math.Max(swSeq.ElapsedMilliseconds, 1);
@@ -78,24 +79,26 @@ public sealed class SimuladorService
     private async Task<List<ApuestaEspeculativa>> CalcularSecuencial(
         decimal precioActual,
         IReadOnlyList<decimal> historial,
+        int nucleos,
         CancellationToken ct)
     {
         // Una tras otra — demuestra el cuello de botella secuencial (~30 s)
-        var a = await _estrategias.CalcularAgresiva(precioActual, historial, ct);
-        var c = await _estrategias.CalcularConservadora(precioActual, historial, ct);
-        var t = await _estrategias.CalcularTendencia(precioActual, historial, ct);
+        var a = await _estrategias.CalcularAgresiva(precioActual, historial, nucleos, ct);
+        var c = await _estrategias.CalcularConservadora(precioActual, historial, nucleos, ct);
+        var t = await _estrategias.CalcularTendencia(precioActual, historial, nucleos, ct);
         return [a, c, t];
     }
 
     private async Task<List<ApuestaEspeculativa>> CalcularParalelo(
         decimal precioActual,
         IReadOnlyList<decimal> historial,
+        int nucleos,
         CancellationToken ct)
     {
-        // Paralelo con Task.WhenAll — descomposición especulativa (~10 s)
-        var tA = _estrategias.CalcularAgresiva(precioActual, historial, ct);
-        var tC = _estrategias.CalcularConservadora(precioActual, historial, ct);
-        var tT = _estrategias.CalcularTendencia(precioActual, historial, ct);
+        // Paralelo con Task.WhenAll y particionamiento interno por núcleo.
+        var tA = _estrategias.CalcularAgresiva(precioActual, historial, nucleos, ct);
+        var tC = _estrategias.CalcularConservadora(precioActual, historial, nucleos, ct);
+        var tT = _estrategias.CalcularTendencia(precioActual, historial, nucleos, ct);
         return [.. await Task.WhenAll(tA, tC, tT)];
     }
 
