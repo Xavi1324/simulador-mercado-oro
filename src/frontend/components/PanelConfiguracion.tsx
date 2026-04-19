@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 
 const INTERVALOS = [1, 2, 5, 10];
 
@@ -10,7 +10,11 @@ interface PanelConfiguracionProps {
   saldoPortafolio: number;
   saldoInicialPortafolio: number;
   modoFuente: 'Swissquote' | 'API' | 'CSV' | null;
-  onIniciar: (nucleos: number, intervalo: number) => void;
+  nucleos: number;
+  intervalo: number;
+  onNucleosChange: (nucleos: number) => void;
+  onIntervaloChange: (intervalo: number) => void;
+  onIniciar: () => void;
   onPausar: () => void;
   onConfigurar: (nucleos: number, intervalo: number) => void;
   onCambiarFuente: (fuente: 'Swissquote' | 'CSV') => void;
@@ -24,14 +28,15 @@ export default function PanelConfiguracion({
   saldoPortafolio,
   saldoInicialPortafolio,
   modoFuente,
+  nucleos,
+  intervalo,
+  onNucleosChange,
+  onIntervaloChange,
   onIniciar,
   onPausar,
   onConfigurar,
   onCambiarFuente,
 }: PanelConfiguracionProps) {
-  const [nucleos, setNucleos]     = useState(1);
-  const [intervalo, setIntervalo] = useState(2);
-
   useEffect(() => {
     if (simulacionActiva) {
       onConfigurar(nucleos, intervalo);
@@ -61,7 +66,7 @@ export default function PanelConfiguracion({
           min={1}
           max={Math.max(nucleosDisponibles, 1)}
           value={nucleos}
-          onChange={(e) => setNucleos(Number(e.target.value))}
+          onChange={(e) => onNucleosChange(Number(e.target.value))}
           className="accent-blue-500 w-full"
         />
         <div className="flex justify-between text-slate-500 text-xs mt-1">
@@ -77,7 +82,7 @@ export default function PanelConfiguracion({
           {INTERVALOS.map((seg) => (
             <button
               key={seg}
-              onClick={() => setIntervalo(seg)}
+              onClick={() => onIntervaloChange(seg)}
               className={`flex-1 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                 intervalo === seg ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
               }`}
@@ -118,7 +123,7 @@ export default function PanelConfiguracion({
       <div className="flex flex-col gap-2 pt-1">
         {!simulacionActiva ? (
           <button
-            onClick={() => onIniciar(nucleos, intervalo)}
+            onClick={onIniciar}
             disabled={!conectado}
             className="bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-medium transition-colors"
           >

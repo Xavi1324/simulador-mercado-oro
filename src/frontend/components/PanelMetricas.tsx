@@ -45,7 +45,10 @@ function etiquetaLock(pct: number): { texto: string; color: string } {
   return               { texto: 'Cuello de botella fuerte', color: 'text-red-400' };
 }
 
-export default function PanelMetricas({ onNuevaMetricaRef, metricasIniciales }: PanelMetricasProps) {
+export default function PanelMetricas({
+  onNuevaMetricaRef,
+  metricasIniciales,
+}: PanelMetricasProps) {
   const [historial, setHistorial] = useState<NuevaMetricaPayload[]>([]);
   const [ultima, setUltima] = useState<NuevaMetricaPayload | null>(null);
 
@@ -87,8 +90,8 @@ export default function PanelMetricas({ onNuevaMetricaRef, metricasIniciales }: 
     : null;
 
   const fraseNucleos = nucleos > 1
-    ? `${nucleos} agentes en paralelo`
-    : '1 agente (secuencial)';
+    ? `${nucleos} tareas en paralelo`
+    : '1 tarea (secuencial)';
 
   return (
     <div className="bg-slate-800 rounded-xl p-4 space-y-3">

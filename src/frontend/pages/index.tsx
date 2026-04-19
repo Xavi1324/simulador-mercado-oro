@@ -4,6 +4,7 @@ import type { ConsoleLogPayload, MetricaCiclo } from '@/types/simulador';
 import { useSimuladorHub } from '@/hooks/useSimuladorHub';
 import PanelConfiguracion from '@/components/PanelConfiguracion';
 import PanelMetricas      from '@/components/PanelMetricas';
+import PanelPruebaDatosCompartidos from '@/components/PanelPruebaDatosCompartidos';
 import OverlayCalculando  from '@/components/overlays/OverlayCalculando';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? 'http://localhost:5000';
@@ -81,11 +82,15 @@ export default function Home() {
     predicciones,
     estrategiaSeleccionada,
     saldoPortafolio,
+    pruebaCargaPortafolio,
     consoleLogs,
     segsRestantes,
+    ejecutarPruebaCargaPortafolio,
   } = useSimuladorHub();
 
   const [nucleosDisponibles, setNucleosDisponibles] = useState(4);
+  const [nucleosSeleccionados, setNucleosSeleccionados] = useState(1);
+  const [intervaloSeleccionado, setIntervaloSeleccionado] = useState(2);
   const [simulacionActiva, setSimulacionActiva]     = useState(false);
   const [metricasIniciales, setMetricasIniciales]   = useState<MetricaCiclo[]>([]);
 
@@ -100,12 +105,13 @@ export default function Home() {
     if (estadoInicial) {
       setSimulacionActiva(estadoInicial.simulacionActiva);
       setNucleosDisponibles(estadoInicial.nucleosDisponibles);
+      setNucleosSeleccionados(Math.max(1, Math.min(estadoInicial.nucleos, estadoInicial.nucleosDisponibles)));
       setMetricasIniciales(estadoInicial.ultimasMetricas ?? []);
     }
   }, [estadoInicial]);
 
-  const handleIniciar = (nucleos: number, intervalo: number) => {
-    iniciar(nucleos, intervalo);
+  const handleIniciar = () => {
+    iniciar(nucleosSeleccionados, intervaloSeleccionado);
     setSimulacionActiva(true);
   };
 
@@ -189,6 +195,10 @@ export default function Home() {
             saldoPortafolio={saldoPortafolio}
             saldoInicialPortafolio={estadoInicial?.saldoInicialPortafolio ?? 1_000}
             modoFuente={modoFuente}
+            nucleos={nucleosSeleccionados}
+            intervalo={intervaloSeleccionado}
+            onNucleosChange={setNucleosSeleccionados}
+            onIntervaloChange={setIntervaloSeleccionado}
             onIniciar={handleIniciar}
             onPausar={handlePausar}
             onConfigurar={configurar}
@@ -199,6 +209,13 @@ export default function Home() {
             metricasIniciales={metricasIniciales}
           />
         </div>
+
+        <PanelPruebaDatosCompartidos
+          conectado={conectado}
+          nucleosSeleccionados={nucleosSeleccionados}
+          pruebaCargaPortafolio={pruebaCargaPortafolio}
+          onEjecutarPruebaCarga={ejecutarPruebaCargaPortafolio}
+        />
 
         <ConsolaSistema logs={consoleLogs} />
       </div>

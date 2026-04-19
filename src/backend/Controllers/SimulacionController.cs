@@ -9,11 +9,16 @@ public class SimulacionController : ControllerBase
 {
     private readonly MercadoCentral _mercadoCentral;
     private readonly MetricasEngine _metricasEngine;
+    private readonly PruebaCargaPortafolioService _pruebaCargaPortafolio;
 
-    public SimulacionController(MercadoCentral mercadoCentral, MetricasEngine metricasEngine)
+    public SimulacionController(
+        MercadoCentral mercadoCentral,
+        MetricasEngine metricasEngine,
+        PruebaCargaPortafolioService pruebaCargaPortafolio)
     {
         _mercadoCentral = mercadoCentral;
         _metricasEngine = metricasEngine;
+        _pruebaCargaPortafolio = pruebaCargaPortafolio;
     }
 
     [HttpGet("sistema/nucleos")]
@@ -64,6 +69,13 @@ public class SimulacionController : ControllerBase
 
         byte[] contenido = await System.IO.File.ReadAllBytesAsync(archivo);
         return File(contenido, "text/csv", Path.GetFileName(archivo));
+    }
+
+    [HttpPost("portafolio/prueba-carga")]
+    public async Task<IActionResult> EjecutarPruebaCargaPortafolio([FromBody] PruebaCargaPortafolioRequest req, CancellationToken ct)
+    {
+        var resultado = await _pruebaCargaPortafolio.EjecutarAsync(req, ct: ct);
+        return Ok(resultado);
     }
 }
 

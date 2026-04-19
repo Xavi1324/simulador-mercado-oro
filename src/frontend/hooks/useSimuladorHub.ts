@@ -8,6 +8,7 @@ import type {
   PrediccionesCalculadasPayload,
   EstrategiaSeleccionadaPayload,
   PortafolioActualizadoPayload,
+  PruebaCargaPortafolioPayload,
   ConsoleLogPayload,
 } from '@/types/simulador';
 
@@ -30,8 +31,13 @@ export function useSimuladorHub() {
   const [estrategiaSeleccionada, setEstrategiaSeleccionada] = useState<ApuestaEspeculativa | null>(null);
   const [saldoPortafolio, setSaldoPortafolio] = useState(0);
   const [consoleLogs, setConsoleLogs] = useState<ConsoleLogPayload[]>([]);
+  const [pruebaCargaPortafolio, setPruebaCargaPortafolio] =
+    useState<PruebaCargaPortafolioPayload | null>(null);
   const [segsRestantes, setSegsRestantes] = useState<number | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pruebaCargaThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pruebaCargaUltimaRef = useRef<PruebaCargaPortafolioPayload | null>(null);
+  const pruebaCargaUltimoRenderMsRef = useRef(0);
 
   // Callbacks de alta frecuencia — via refs para evitar re-renders
   const onNuevoPrecioRef   = useRef<((data: NuevoPrecioPayload) => void) | null>(null);
@@ -112,6 +118,42 @@ export function useSimuladorHub() {
       setSegsRestantes(null);
     });
 
+    const publicarPruebaCarga = (data: PruebaCargaPortafolioPayload) => {
+      setPruebaCargaPortafolio(data);
+      pruebaCargaUltimoRenderMsRef.current = Date.now();
+    };
+
+    hub.on('PruebaCargaPortafolio', (data: PruebaCargaPortafolioPayload) => {
+      if (data.estado !== 'progreso') {
+        if (pruebaCargaThrottleRef.current) {
+          clearTimeout(pruebaCargaThrottleRef.current);
+          pruebaCargaThrottleRef.current = null;
+        }
+        pruebaCargaUltimaRef.current = null;
+        publicarPruebaCarga(data);
+        return;
+      }
+
+      pruebaCargaUltimaRef.current = data;
+      const elapsedMs = Date.now() - pruebaCargaUltimoRenderMsRef.current;
+
+      if (elapsedMs >= 1_000) {
+        publicarPruebaCarga(data);
+        pruebaCargaUltimaRef.current = null;
+        return;
+      }
+
+      if (!pruebaCargaThrottleRef.current) {
+        pruebaCargaThrottleRef.current = setTimeout(() => {
+          if (pruebaCargaUltimaRef.current) {
+            publicarPruebaCarga(pruebaCargaUltimaRef.current);
+          }
+          pruebaCargaUltimaRef.current = null;
+          pruebaCargaThrottleRef.current = null;
+        }, 1_000 - elapsedMs);
+      }
+    });
+
     hub.onreconnecting(() => setConectado(false));
     hub.onreconnected(()  => setConectado(true));
     hub.onclose(()        => setConectado(false));
@@ -126,6 +168,7 @@ export function useSimuladorHub() {
     return () => {
       hub.stop();
       if (countdownRef.current) clearInterval(countdownRef.current);
+      if (pruebaCargaThrottleRef.current) clearTimeout(pruebaCargaThrottleRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -151,6 +194,15 @@ export function useSimuladorHub() {
     hubRef.current.invoke('CambiarFuente', fuente);
   }, [conectado]);
 
+  const ejecutarPruebaCargaPortafolio = useCallback((
+    operaciones: number,
+    concurrencia: number,
+    trabajoCriticoMs: number,
+  ) => {
+    if (!hubRef.current || !conectado) return;
+    hubRef.current.invoke('EjecutarPruebaCargaPortafolio', operaciones, concurrencia, trabajoCriticoMs);
+  }, [conectado]);
+
   return {
     conectado,
     modoFuente,
@@ -167,8 +219,10 @@ export function useSimuladorHub() {
     predicciones,
     estrategiaSeleccionada,
     saldoPortafolio,
+    pruebaCargaPortafolio,
     consoleLogs,
     cambiarFuente,
+    ejecutarPruebaCargaPortafolio,
     segsRestantes,
   };
 }

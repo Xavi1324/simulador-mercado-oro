@@ -108,4 +108,59 @@ public class PortafolioTests
 
         Assert.Equal(900m, portafolio.Saldo);
     }
+
+    [Fact]
+    public async Task PruebaCargaPortafolio_OperacionesAleatorias_CoincideConSaldoEsperado()
+    {
+        var portafolio = new Portafolio();
+        var service = new PruebaCargaPortafolioService(portafolio);
+
+        var resultado = await service.EjecutarAsync(new PruebaCargaPortafolioRequest(
+            Operaciones: 1_000,
+            Concurrencia: 16,
+            TrabajoCriticoMs: 0));
+
+        Assert.True(resultado.Consistente);
+        Assert.Equal(resultado.SaldoEsperado, resultado.SaldoObtenido);
+        Assert.Equal(resultado.Operaciones, resultado.Ganadas + resultado.Perdidas);
+        Assert.Equal(1_000m + resultado.Ganadas * 100m - resultado.Perdidas * 100m, resultado.SaldoObtenido);
+        Assert.True(resultado.AdquisicionesLock >= resultado.Operaciones);
+    }
+
+    [Fact]
+    public async Task PruebaCargaPortafolio_TrabajoCritico_RegistraPresionDeLock()
+    {
+        var portafolio = new Portafolio();
+        var service = new PruebaCargaPortafolioService(portafolio);
+
+        var resultado = await service.EjecutarAsync(new PruebaCargaPortafolioRequest(
+            Operaciones: 120,
+            Concurrencia: 12,
+            TrabajoCriticoMs: 1));
+
+        Assert.True(resultado.Consistente);
+        Assert.Equal(resultado.Operaciones, resultado.Ganadas + resultado.Perdidas);
+        Assert.Equal(resultado.SaldoEsperado, resultado.SaldoObtenido);
+        Assert.True(resultado.TiempoTotalMs > 0);
+        Assert.True(resultado.TiempoEsperaLockMs >= 0);
+        Assert.True(resultado.PorcentajeLock >= 0);
+        Assert.True(portafolio.AdquisicionesLock >= resultado.Operaciones);
+    }
+
+    [Fact]
+    public async Task PruebaCargaPortafolio_NormalizaHastaDoscientasMilOperaciones()
+    {
+        var portafolio = new Portafolio();
+        var service = new PruebaCargaPortafolioService(portafolio);
+
+        var resultado = await service.EjecutarAsync(new PruebaCargaPortafolioRequest(
+            Operaciones: 200_001,
+            Concurrencia: 16,
+            TrabajoCriticoMs: 0));
+
+        Assert.Equal(200_000, resultado.Operaciones);
+        Assert.True(resultado.Consistente);
+        Assert.Equal(resultado.Operaciones, resultado.Ganadas + resultado.Perdidas);
+        Assert.Equal(resultado.SaldoEsperado, resultado.SaldoObtenido);
+    }
 }

@@ -12,6 +12,7 @@ public class SimuladorHub : Hub
     private readonly MetricasEngine  _metricasEngine;
     private readonly FuenteDeDatos   _fuenteDeDatos;
     private readonly Portafolio      _portafolio;
+    private readonly PruebaCargaPortafolioService _pruebaCargaPortafolio;
     private readonly SimuladorOptions _opciones;
 
     public SimuladorHub(
@@ -19,12 +20,14 @@ public class SimuladorHub : Hub
         MetricasEngine metricasEngine,
         FuenteDeDatos fuenteDeDatos,
         Portafolio portafolio,
+        PruebaCargaPortafolioService pruebaCargaPortafolio,
         IOptions<SimuladorOptions> opciones)
     {
         _mercadoCentral = mercadoCentral;
         _metricasEngine = metricasEngine;
         _fuenteDeDatos  = fuenteDeDatos;
         _portafolio     = portafolio;
+        _pruebaCargaPortafolio = pruebaCargaPortafolio;
         _opciones       = opciones.Value;
     }
 
@@ -76,6 +79,110 @@ public class SimuladorHub : Hub
         _fuenteDeDatos.SetModo(fuente == "CSV");
         await Clients.All.SendAsync("ModoFuenteChanged", fuente);
         await _mercadoCentral.EmitirConsoleLog("info", "fuente", $"Fuente de datos cambiada a {fuente}.");
+    }
+
+    public async Task EjecutarPruebaCargaPortafolio(int operaciones, int concurrencia, int trabajoCriticoMs)
+    {
+        var req = new PruebaCargaPortafolioRequest(operaciones, concurrencia, trabajoCriticoMs);
+
+        await _mercadoCentral.EmitirConsoleLog("info", "carga-portafolio",
+            $"Prueba de carga iniciada: {operaciones} operaciones, concurrencia {concurrencia}, trabajo crítico {trabajoCriticoMs} ms.",
+            nucleos: concurrencia);
+
+        PruebaCargaPortafolioResultado? resultadoFinal = null;
+
+        try
+        {
+            resultadoFinal = await _pruebaCargaPortafolio.EjecutarAsync(req, async progreso =>
+            {
+                await Clients.All.SendAsync("PruebaCargaPortafolio", progreso);
+
+                if (progreso.Estado == "progreso" || progreso.Estado == "completada")
+                {
+                    await Clients.All.SendAsync("NuevaMetrica", new
+                    {
+                        speedup = 1.0,
+                        eficiencia = progreso.Estado == "completada" && !progreso.Consistente ? 0.0 : 1.0,
+                        throughput = progreso.TiempoTotalMs > 0
+                            ? progreso.Completadas / (progreso.TiempoTotalMs / 1000.0)
+                            : 0,
+                        cuellobotella = progreso.PorcentajeLock,
+                        tiempoParaleloMs = progreso.TiempoTotalMs,
+                        tiempoSecuencialMs = progreso.TiempoEsperaLockMs,
+                        nucleos = progreso.Concurrencia,
+                    });
+
+                    await Clients.All.SendAsync("PortafolioActualizado", new
+                    {
+                        balance = _portafolio.Saldo,
+                        ultimoEvento = $"Carga de portafolio: {progreso.Ganadas} ganancias, {progreso.Perdidas} pérdidas.",
+                    });
+
+                    await _mercadoCentral.EmitirConsoleLog(
+                        progreso.Estado == "completada" && !progreso.Consistente ? "warning" : "info",
+                        "carga-portafolio",
+                        $"Progreso {progreso.Completadas}/{progreso.Operaciones} | ganadas {progreso.Ganadas} | pérdidas {progreso.Perdidas} | espera lock {progreso.TiempoEsperaLockMs} ms | presión {progreso.PorcentajeLock:F2}% | saldo ${progreso.SaldoObtenido:N2}",
+                        nucleos: progreso.Concurrencia,
+                        tiempoSecuencialMs: progreso.TiempoEsperaLockMs,
+                        tiempoParaleloMs: progreso.TiempoTotalMs);
+                }
+            }, Context.ConnectionAborted);
+
+            await Clients.All.SendAsync("PortafolioActualizado", new
+            {
+                balance = _portafolio.Saldo,
+                ultimoEvento = resultadoFinal.Consistente
+                    ? "Prueba de carga completada sin corrupción del saldo."
+                    : "Prueba de carga detectó inconsistencia en el saldo.",
+            });
+
+            await Clients.All.SendAsync("NuevaMetrica", new
+            {
+                speedup = 1.0,
+                eficiencia = resultadoFinal.Consistente ? 1.0 : 0.0,
+                throughput = resultadoFinal.TiempoTotalMs > 0
+                    ? resultadoFinal.Completadas / (resultadoFinal.TiempoTotalMs / 1000.0)
+                    : 0,
+                cuellobotella = 0.0,
+                tiempoParaleloMs = resultadoFinal.TiempoTotalMs,
+                tiempoSecuencialMs = 0,
+                nucleos = resultadoFinal.Concurrencia,
+            });
+
+            await _mercadoCentral.EmitirConsoleLog(
+                resultadoFinal.Consistente ? "success" : "error",
+                "carga-portafolio",
+                $"Prueba completada: ganadas {resultadoFinal.Ganadas}, pérdidas {resultadoFinal.Perdidas}, esperado ${resultadoFinal.SaldoEsperado:N2}, obtenido ${resultadoFinal.SaldoObtenido:N2}, adquisiciones lock {resultadoFinal.AdquisicionesLock}.",
+                nucleos: resultadoFinal.Concurrencia,
+                tiempoSecuencialMs: resultadoFinal.TiempoEsperaLockMs,
+                tiempoParaleloMs: resultadoFinal.TiempoTotalMs);
+        }
+        catch (Exception ex)
+        {
+            await Clients.All.SendAsync("PruebaCargaPortafolio", new
+            {
+                estado = "fallida",
+                operaciones,
+                completadas = 0,
+                concurrencia,
+                trabajoCriticoMs,
+                montoOperacion = 100m,
+                saldoInicial = _portafolio.Saldo,
+                saldoEsperado = _portafolio.Saldo,
+                saldoObtenido = _portafolio.Saldo,
+                ganadas = 0,
+                perdidas = 0,
+                tiempoTotalMs = 0,
+                tiempoEsperaLockMs = 0,
+                porcentajeLock = 0,
+                adquisicionesLock = 0,
+                consistente = false,
+            });
+
+            await _mercadoCentral.EmitirConsoleLog("error", "carga-portafolio",
+                $"Prueba de carga falló: {ex.Message}", nucleos: concurrencia);
+            throw;
+        }
     }
 
     // ── Ciclo especulativo: automático en MercadoCentral ─────────────────────

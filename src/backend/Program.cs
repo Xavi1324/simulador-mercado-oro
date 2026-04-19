@@ -25,6 +25,7 @@ builder.Services.AddHostedService(p => p.GetRequiredService<MercadoCentral>());
 builder.Services.AddSingleton<EstrategiaService>();
 builder.Services.AddSingleton<SimuladorService>();
 builder.Services.AddSingleton<PortafolioService>();
+builder.Services.AddSingleton<PruebaCargaPortafolioService>();
 
 // CORS — obligatorio para SignalR con Next.js (AllowCredentials requiere origen explícito)
 builder.Services.AddCors(options =>

@@ -85,6 +85,26 @@ export interface PortafolioActualizadoPayload {
   ultimoEvento: string | null;
 }
 
+// Evento PruebaCargaPortafolio (servidor → cliente)
+export interface PruebaCargaPortafolioPayload {
+  estado: 'iniciada' | 'progreso' | 'completada' | 'fallida';
+  operaciones: number;
+  completadas: number;
+  concurrencia: number;
+  trabajoCriticoMs: number;
+  montoOperacion: number;
+  saldoInicial: number;
+  saldoEsperado: number;
+  saldoObtenido: number;
+  ganadas: number;
+  perdidas: number;
+  tiempoTotalMs: number;
+  tiempoEsperaLockMs: number;
+  porcentajeLock: number;
+  adquisicionesLock: number;
+  consistente: boolean;
+}
+
 // Evento ConsoleLog (servidor → cliente)
 export interface ConsoleLogPayload {
   timestamp: string;
