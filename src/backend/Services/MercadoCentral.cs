@@ -62,7 +62,6 @@ public sealed class MercadoCentral : BackgroundService
         _nucleos           = Math.Max(1, nucleos);
         _intervaloSegundos = Math.Max(1, intervaloSegundos);
         _modoEspeculacion  = ResolverModo(_nucleos);
-        _portafolioService.Reiniciar();
         _activo = true;
         _logger.LogInformation("Simulación iniciada: {N} núcleos, {I}s, modo={M}", _nucleos, _intervaloSegundos, _modoEspeculacion);
     }
@@ -82,6 +81,10 @@ public sealed class MercadoCentral : BackgroundService
     }
 
     public bool EstaActivo => _activo;
+
+    public int NucleosActuales => _nucleos;
+
+    public int IntervaloSegundosActual => _intervaloSegundos;
 
     public ModoEjecucion ModoEspeculacion => _modoEspeculacion;
 

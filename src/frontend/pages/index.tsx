@@ -106,6 +106,7 @@ export default function Home() {
       setSimulacionActiva(estadoInicial.simulacionActiva);
       setNucleosDisponibles(estadoInicial.nucleosDisponibles);
       setNucleosSeleccionados(Math.max(1, Math.min(estadoInicial.nucleos, estadoInicial.nucleosDisponibles)));
+      setIntervaloSeleccionado(estadoInicial.intervaloSegundos);
       setMetricasIniciales(estadoInicial.ultimasMetricas ?? []);
     }
   }, [estadoInicial]);

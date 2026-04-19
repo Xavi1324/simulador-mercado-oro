@@ -42,7 +42,8 @@ public class SimuladorHub : Hub
         await Clients.Caller.SendAsync("EstadoInicial", new
         {
             simulacionActiva        = true,
-            nucleos,
+            nucleos                 = _mercadoCentral.NucleosActuales,
+            intervaloSegundos       = _mercadoCentral.IntervaloSegundosActual,
             nucleosDisponibles      = Environment.ProcessorCount,
             ultimasMetricas,
             saldoInicialPortafolio  = _opciones.SaldoInicialPortafolio,
@@ -58,7 +59,8 @@ public class SimuladorHub : Hub
         await Clients.Caller.SendAsync("EstadoInicial", new
         {
             simulacionActiva       = false,
-            nucleos                = 1,
+            nucleos                = _mercadoCentral.NucleosActuales,
+            intervaloSegundos      = _mercadoCentral.IntervaloSegundosActual,
             nucleosDisponibles     = Environment.ProcessorCount,
             ultimasMetricas        = _metricasEngine.ObtenerUltimasMetricas(10),
             saldoInicialPortafolio = _opciones.SaldoInicialPortafolio,
@@ -195,7 +197,8 @@ public class SimuladorHub : Hub
         await Clients.Caller.SendAsync("EstadoInicial", new
         {
             simulacionActiva       = _mercadoCentral.EstaActivo,
-            nucleos                = 1,
+            nucleos                = _mercadoCentral.NucleosActuales,
+            intervaloSegundos      = _mercadoCentral.IntervaloSegundosActual,
             nucleosDisponibles     = Environment.ProcessorCount,
             ultimasMetricas,
             saldoInicialPortafolio = _opciones.SaldoInicialPortafolio,

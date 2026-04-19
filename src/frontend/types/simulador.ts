@@ -21,6 +21,7 @@ export interface NuevaMetricaPayload {
 export interface EstadoInicialPayload {
   simulacionActiva: boolean;
   nucleos: number;
+  intervaloSegundos: number;
   nucleosDisponibles: number;
   ultimasMetricas: MetricaCiclo[];
   saldoInicialPortafolio: number;

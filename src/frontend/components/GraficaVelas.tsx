@@ -99,27 +99,27 @@ export default function GraficaVelas({
       observerRef.observe(containerRef.current);
 
       onNuevoPrecioRef.current = (data: NuevoPrecioPayload) => {
-
-        if (precioActualRef.current) {
-          precioActualRef.current.textContent = `$${data.precio.toLocaleString('en-US', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          })}`;
-        }
-
         ticksEnVelaActualRef.current.push(data.precio);
 
         if (ticksEnVelaActualRef.current.length === TICKS_POR_VELA) {
 
           const precios = ticksEnVelaActualRef.current;
+          const cierre = precios[TICKS_POR_VELA - 1];
 
           const vela = {
             time: Math.floor(Date.now() / 1000) as UTCTimestamp,
             open: precios[0],
             high: Math.max(...precios),
             low: Math.min(...precios),
-            close: precios[TICKS_POR_VELA - 1],
+            close: cierre,
           };
+
+          if (precioActualRef.current) {
+            precioActualRef.current.textContent = `$${cierre.toLocaleString('en-US', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}`;
+          }
 
           seriesRef.current?.update(vela);
           ticksEnVelaActualRef.current = [];

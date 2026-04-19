@@ -111,6 +111,8 @@ export function useSimuladorHub() {
 
     hub.on('PortafolioActualizado', (data: PortafolioActualizadoPayload) => {
       setSaldoPortafolio(data.balance);
+      setPredicciones(null);
+      setEstrategiaSeleccionada(null);
       if (countdownRef.current) {
         clearInterval(countdownRef.current);
         countdownRef.current = null;
