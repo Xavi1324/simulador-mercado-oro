@@ -2,7 +2,6 @@ namespace SimuladorBackend.Models;
 
 public class Apuesta
 {
-    public int AgenteId { get; set; }
     public string Estrategia { get; set; } = "";
     public decimal PrecioEntrada { get; set; }
     public decimal PrecioEsperado { get; set; }
