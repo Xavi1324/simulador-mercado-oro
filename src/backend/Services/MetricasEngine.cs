@@ -1,4 +1,5 @@
 using System.Text;
+using Microsoft.AspNetCore.Hosting;
 using SimuladorBackend.Models;
 
 namespace SimuladorBackend.Services;
@@ -7,6 +8,15 @@ public class MetricasEngine
 {
     private readonly List<MetricasCiclo> _historial = [];
     private readonly object _historialLock = new();
+    private readonly string _metricsDir;
+
+    public MetricasEngine(IWebHostEnvironment env)
+    {
+        // ContentRootPath = .../simulador-mercado-oro/src/backend
+        // Subiendo dos niveles llegamos a .../simulador-mercado-oro/metrics
+        _metricsDir = Path.GetFullPath(
+            Path.Combine(env.ContentRootPath, "..", "..", "metrics"));
+    }
 
     public MetricasCiclo RegistrarMetrica(
         int nucleos,
@@ -57,8 +67,9 @@ public class MetricasEngine
 
         if (copia.Count == 0) return string.Empty;
 
-        Directory.CreateDirectory("metrics");
-        string archivo = $"metrics/resultados_{DateTime.UtcNow:yyyyMMdd_HHmmss}.csv";
+        Directory.CreateDirectory(_metricsDir);
+        string archivo = Path.Combine(_metricsDir,
+            $"resultados_{DateTime.UtcNow:yyyyMMdd_HHmmss}.csv");
 
         var sb = new StringBuilder();
         sb.AppendLine("Nucleos,TickNumero,TiempoSecuencialMs,TiempoParaleloMs,Speedup,Eficiencia,DecisionesPorSegundo,PorcentajeLock,PrecioOro,SaldoPortafolio,Timestamp");
