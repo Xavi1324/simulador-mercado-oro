@@ -56,7 +56,7 @@ public sealed class SimuladorService
         }
 
         double speedup    = (double)tiempoSecuencialMs / tiempoParaleloMs;
-        double eficiencia = nucleos > 0 ? speedup / nucleos : speedup;
+        double eficiencia = nucleos > 0 ? Math.Min(1.0, speedup / nucleos) : Math.Min(1.0, speedup);
 
         // Selección ALEATORIA — no siempre gana la misma estrategia
         var seleccionada = SeleccionarAleatoria(todas);

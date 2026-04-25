@@ -9,13 +9,16 @@ public class MetricasEngine
     private readonly List<MetricasCiclo> _historial = [];
     private readonly object _historialLock = new();
     private readonly string _metricsDir;
+    private readonly Portafolio _portafolio;
+    private long _ultimoTiempoLockMs;
 
-    public MetricasEngine(IWebHostEnvironment env)
+    public MetricasEngine(IWebHostEnvironment env, Portafolio portafolio)
     {
         // ContentRootPath = .../simulador-mercado-oro/src/backend
         // Subiendo dos niveles llegamos a .../simulador-mercado-oro/metrics
         _metricsDir = Path.GetFullPath(
             Path.Combine(env.ContentRootPath, "..", "..", "metrics"));
+        _portafolio = portafolio;
     }
 
     public MetricasCiclo RegistrarMetrica(
@@ -29,8 +32,15 @@ public class MetricasEngine
         long tSeq = Math.Max(tiempoSecuencialMs, 1);
         long tPar = Math.Max(tiempoParaleloMs, 1);
         double speedup    = (double)tSeq / tPar;
-        double eficiencia = nucleos > 0 ? speedup / nucleos : speedup;
-        double throughput = nucleos * 3.0 / (tPar / 1000.0 + 0.001);
+        double eficiencia = nucleos > 0 ? Math.Min(1.0, speedup / nucleos) : Math.Min(1.0, speedup);
+        // 3 estrategias por ciclo independientemente del número de núcleos
+        double throughput = 3.0 / (tPar / 1000.0 + 0.001);
+
+        // Delta de tiempo esperando el lock en este ciclo vs el total paralelo
+        long lockActual   = _portafolio.TiempoEsperaLockMs;
+        long deltaLock    = lockActual - _ultimoTiempoLockMs;
+        _ultimoTiempoLockMs = lockActual;
+        double porcentajeLock = deltaLock > 0 ? deltaLock * 100.0 / tPar : 0;
 
         var metrica = new MetricasCiclo
         {
@@ -41,7 +51,7 @@ public class MetricasEngine
             Speedup              = speedup,
             Eficiencia           = eficiencia,
             DecisionesPorSegundo = throughput,
-            PorcentajeLock       = 0,
+            PorcentajeLock       = porcentajeLock,
             PrecioOro            = precioOro,
             SaldoPortafolio      = saldoPortafolio,
             Timestamp            = DateTime.UtcNow,
